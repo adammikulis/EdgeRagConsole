@@ -21,10 +21,8 @@
             uint contextSize = 4096;
             IInputHandler inputHandler = new ConsoleInputHandler();
             bool useDatabase = false;
-
-            var pipeline = new RagPipelineConsole(directoryPath, facts, contextSize, inputHandler, useDatabase);
-            await pipeline.InitializeAsync();
-            await pipeline.StartChatAsync();
+            ModelLoaderConsole modelLoader = new ModelLoaderConsole(directoryPath, facts, contextSize, useDatabase);
+            await modelLoader.InitializeAsync(inputHandler);
         }
     }
 }
