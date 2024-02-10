@@ -4,11 +4,11 @@ using System.Data;
 
 namespace EdgeRag
 {
-    public class RagPipelineBase
+    public class ConversationLoader
     {
         protected bool useDatabase;
         protected string? directoryPath;
-        protected string selectedModelPath;
+        protected string? selectedModelPath;
         protected string? fullModelName;
         protected string? modelType;
         protected string[]? facts;
@@ -19,26 +19,30 @@ namespace EdgeRag
         protected string conversation;
         protected string query;
         protected string prompt;
-        protected int num_gpu_layers;
-        protected uint num_cpu_threads;
         protected int num_top_matches;
 
-        protected DataTable dt;
-        protected ModelParams? modelParams;
         protected LLamaWeights? model;
+        protected ModelParams? modelParams;
         protected LLamaEmbedder? embedder;
         protected LLamaContext? context;
         protected InteractiveExecutor? executor;
         protected ChatSession? session;
+
+        protected DataTable dt { get; private set; }
         private IInputHandler inputHandler;
         public event Action<string> OnMessage = delegate { };
 
-        public RagPipelineBase(string directoryPath, string[] facts, uint contextSize, IInputHandler inputHandler, bool useDatabase)
+        public ConversationLoader(IInputHandler inputHandler, LLamaWeights model, string modelType, ModelParams modelParams, LLamaEmbedder embedder, LLamaContext context, DataTable dt, bool useDatabase)
         {
-            this.directoryPath = directoryPath;
-            this.useDatabase = useDatabase;
-            selectedModelPath = "";
-            
+            this.inputHandler = inputHandler;
+            this.model = model;
+            this.modelParams = modelParams;
+            this.embedder = embedder;
+            this.context = context;
+            this.dt = dt;
+            this.useDatabase = useDatabase;      
+            this.modelType = modelType;
+
             // Still haven't figured out a prompt that allows the network to use its existing knowledge and not just the DB Facts
             prompts = new string[] {
                 $"Reply in a natural manner and utilize your existing knowledge. If you don't know the answer, use one of the relevant DB facts in the prompt. Be a friendly, concise, never offensive chatbot to help users learn more about the University of Denver. Query: {query}\n"
@@ -48,13 +52,8 @@ namespace EdgeRag
             query = "";
             prompt = "";
             conversation = "";
-            this.facts = facts;
-            num_gpu_layers = 16; // Put to 0 for no GPU
-            num_cpu_threads = 8;
             num_top_matches = 3;
-
-            dt = new DataTable();
-            this.inputHandler = inputHandler;
+            InitializeConversation();
         }
 
         protected void InitializeConversation()
@@ -144,8 +143,6 @@ namespace EdgeRag
         }
     }
 
-
-
     public interface IInputHandler
     {
         Task<string> ReadLineAsync();
@@ -159,19 +156,11 @@ namespace EdgeRag
         }
     }
 
-    public class RagPipelineConsole : RagPipelineBase
+    public class ConversationLoaderConsole : ConversationLoader
     {
-        public RagPipelineConsole(string directoryPath, string[] facts, uint contextSize, IInputHandler inputHandler, bool useDatabase) : base(directoryPath, facts, contextSize, inputHandler, useDatabase)
+        public ConversationLoaderConsole(IInputHandler inputHandler, LLamaWeights model, string modelType, ModelParams modelParams, LLamaEmbedder embedder, LLamaContext context, DataTable dt, bool useDatabase, bool generateSyntheticData) : base(inputHandler, model, modelType, modelParams, embedder, context, dt, useDatabase, generateSyntheticData)
         {
             OnMessage += Console.WriteLine;
         }
     }
-
-    public class IncidentData
-    {
-        public string IncidentNumber { get; set; }
-        public List<string> Conversation { get; set; }
-        public string Solution { get; set; }
-    }
-
 }

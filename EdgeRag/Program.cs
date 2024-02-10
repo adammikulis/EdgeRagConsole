@@ -1,4 +1,6 @@
-﻿namespace EdgeRag
+﻿using LLama;
+
+namespace EdgeRag
 {
     internal class Program
     {
@@ -20,9 +22,16 @@
         };
             uint contextSize = 4096;
             IInputHandler inputHandler = new ConsoleInputHandler();
-            bool useDatabase = false;
+            bool useDatabase = true;
+            bool generateSyntheticData = false; // This creates a chat session that generates synthetic data based on user parameters
+
+            string syntheticDataOutputPath = @"C:\ai\data\synthetic";
+            
             ModelLoaderConsole modelLoader = new ModelLoaderConsole(directoryPath, facts, contextSize, useDatabase);
             await modelLoader.InitializeAsync(inputHandler);
+
+            ConversationLoaderConsole conversationLoader = new ConversationLoaderConsole(inputHandler, modelLoader.model, modelLoader.modelType, modelLoader.modelParams, modelLoader.embedder, modelLoader.context, modelLoader.dt, useDatabase, generateSyntheticData);
+            await conversationLoader.StartChatAsync();
         }
     }
 }

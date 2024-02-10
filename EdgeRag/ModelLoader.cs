@@ -1,4 +1,5 @@
 ﻿using LLama;
+using LLama.Abstractions;
 using LLama.Common;
 using System.Data;
 using System.IO;
@@ -12,37 +13,43 @@ namespace EdgeRag
         private string directoryPath;
         private uint contextSize;
         private string[] facts;
+        protected int num_gpu_layers;
+        protected uint num_cpu_threads;
         public string SelectedModelPath { get; private set; }
-        public string? FullModelName { get; private set; }
-        public string? ModelType { get; private set; }
-        public ModelParams? ModelParams { get; private set; }
-        public LLamaWeights? Model { get; private set; }
-        public LLamaEmbedder? Embedder { get; private set; }
-        public DataTable Dt { get; private set; }
-        public event Action<string> OnMessage = delegate { };
+        public string? fullModelName { get; private set; }
+        public string? modelType { get; private set; }
+        public ModelParams? modelParams { get; private set; }
+        public LLamaWeights? model { get; private set; }
+        public LLamaEmbedder? embedder { get; private set; }
+        public LLamaContext? context { get; private set; }
+        public DataTable dt { get; private set; }
+        public event Action<string> onMessage = delegate { };
+
 
         public ModelLoader(string directoryPath, string[] facts, uint contextSize, bool useDatabase)
         {
             this.directoryPath = directoryPath;
             this.useDatabase = useDatabase;
             this.contextSize = contextSize;
+            num_gpu_layers = 16; // Put to 0 for no GPU
+            num_cpu_threads = 8;
             this.facts = facts;
             SelectedModelPath = "";
-            Dt = new DataTable();
+            dt = new DataTable();
         }
 
         public async Task InitializeAsync(IInputHandler inputHandler)
         {
             if (!Directory.Exists(directoryPath))
             {
-                OnMessage?.Invoke("The directory does not exist.");
+                onMessage?.Invoke("The directory does not exist.");
                 Environment.Exit(0);
             }
 
             var filePaths = Directory.GetFiles(directoryPath);
             if (filePaths.Length == 0)
             {
-                OnMessage?.Invoke("No models found in the directory");
+                onMessage?.Invoke("No models found in the directory");
                 return;
             }
 
@@ -51,39 +58,40 @@ namespace EdgeRag
             {
                 for (int i = 0; i < filePaths.Length; i++)
                 {
-                    OnMessage?.Invoke($"{i + 1}: {Path.GetFileName(filePaths[i])}");
+                    onMessage?.Invoke($"{i + 1}: {Path.GetFileName(filePaths[i])}");
                 }
 
-                OnMessage?.Invoke("\nEnter the number of the model you want to load: ");
+                onMessage?.Invoke("\nEnter the number of the model you want to load: ");
                 if (int.TryParse(await inputHandler.ReadLineAsync(), out int index) && index >= 1 && index <= filePaths.Length)
                 {
                     index -= 1;
                     SelectedModelPath = filePaths[index];
-                    FullModelName = Path.GetFileNameWithoutExtension(SelectedModelPath);
-                    OnMessage?.Invoke($"Model selected: {FullModelName}");
+                    fullModelName = Path.GetFileNameWithoutExtension(SelectedModelPath);
+                    onMessage?.Invoke($"Model selected: {fullModelName}");
                     validModelSelected = true;
 
-                    ModelType = FullModelName.Split('-')[0].ToLower();
+                    modelType = fullModelName.Split('-')[0].ToLower();
                 }
                 else
                 {
-                    OnMessage?.Invoke("Invalid input, please enter a number corresponding to the model list.\n");
+                    onMessage?.Invoke("Invalid input, please enter a number corresponding to the model list.\n");
                 }
             }
 
-            ModelParams = new ModelParams(SelectedModelPath)
+            modelParams = new ModelParams(SelectedModelPath)
             {
                 ContextSize = contextSize,
-                EmbeddingMode = true,
-                GpuLayerCount = 16, // Assuming a default value or this can be passed as a parameter
-                Threads = 8 // Assuming a default value or this can be passed as a parameter
+                EmbeddingMode = true, // Needs to be true to retrieve embeddings
+                GpuLayerCount = num_gpu_layers, // Assuming a default value or this can be passed as a parameter
+                Threads = num_cpu_threads // Assuming a default value or this can be passed as a parameter
             };
 
-            Model = LLamaWeights.LoadFromFile(ModelParams);
-            Embedder = new LLamaEmbedder(Model, ModelParams);
-            OnMessage?.Invoke($"Model: {FullModelName} from {SelectedModelPath} loaded");
+            model = LLamaWeights.LoadFromFile(modelParams);
+            embedder = new LLamaEmbedder(model, modelParams);
+            context = model.CreateContext(modelParams);
+            onMessage?.Invoke($"Model: {fullModelName} from {SelectedModelPath} loaded");
 
-            if (useDatabase)
+            if (useDatabase && embedder != null)
             {
                 InitializeDataTable();
             }
@@ -91,18 +99,20 @@ namespace EdgeRag
 
         private void InitializeDataTable()
         {
-            Dt.Columns.Add("llamaEmbedding", typeof(float[]));
-            Dt.Columns.Add("mistralEmbedding", typeof(float[]));
-            Dt.Columns.Add("mixtralEmbedding", typeof(float[]));
-            Dt.Columns.Add("phiEmbedding", typeof(float[]));
-            Dt.Columns.Add("originalText", typeof(string));
+            dt.Columns.Add("llamaEmbedding", typeof(float[]));
+            dt.Columns.Add("mistralEmbedding", typeof(float[]));
+            dt.Columns.Add("mixtralEmbedding", typeof(float[]));
+            dt.Columns.Add("phiEmbedding", typeof(float[]));
+            dt.Columns.Add("originalText", typeof(string));
+
+            onMessage?.Invoke("\nEmbedding facts with LLM in vector database, please wait.\n");
 
             foreach (var fact in facts)
             {
-                var embeddings = Embedder.GetEmbeddings(fact);
+                var embeddings = embedder.GetEmbeddings(fact);
                 float[]? llamaEmbedding = null, mistralEmbedding = null, mixtralEmbedding = null, phiEmbedding = null;
 
-                switch (ModelType)
+                switch (modelType)
                 {
                     case "llama":
                         llamaEmbedding = embeddings;
@@ -117,13 +127,13 @@ namespace EdgeRag
                         phiEmbedding = embeddings;
                         break;
                     default:
-                        OnMessage?.Invoke($"Unsupported model type: {ModelType}");
+                        onMessage?.Invoke($"Unsupported model type: {modelType}");
                         break;
                 }
 
-                Dt.Rows.Add(llamaEmbedding, mistralEmbedding, mixtralEmbedding, phiEmbedding, fact);
+                dt.Rows.Add(llamaEmbedding, mistralEmbedding, mixtralEmbedding, phiEmbedding, fact);
             }
-            OnMessage?.Invoke("Facts embedded!");
+            onMessage?.Invoke("Facts embedded!");
         }
     }
 
@@ -131,7 +141,7 @@ namespace EdgeRag
     {
         public ModelLoaderConsole(string directoryPath, string[] facts, uint contextSize, bool useDatabase) : base(directoryPath, facts, contextSize, useDatabase)
         {
-            OnMessage += Console.WriteLine;
+            onMessage += Console.WriteLine;
         }
     }
 }
