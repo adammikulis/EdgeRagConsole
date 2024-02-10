@@ -6,6 +6,7 @@ namespace EdgeRag
 {
     public class RagPipelineBase
     {
+        protected bool useDatabase;
         protected string? directoryPath;
         protected string selectedModelPath;
         protected string? fullModelName;
@@ -32,12 +33,15 @@ namespace EdgeRag
         private IInputHandler inputHandler;
         public event Action<string> OnMessage = delegate { };
 
-        public RagPipelineBase(string directoryPath, string[] facts, uint contextSize, IInputHandler inputHandler)
+        public RagPipelineBase(string directoryPath, string[] facts, uint contextSize, IInputHandler inputHandler, bool useDatabase)
         {
             this.directoryPath = directoryPath;
+            this.useDatabase = useDatabase;
             selectedModelPath = "";
+            
+            // Still haven't figured out a prompt that allows the network to use its existing knowledge and not just the DB Facts
             prompts = new string[] {
-                $"Reply in a natural manner utilizing the most relevant DB fact in the prompt to add to your existing knowledge. Be a friendly, concise, never offensive chatbot to help users learn more about the University of Denver. Query: {query}\n"
+                $"Reply in a natural manner and utilize your existing knowledge. If you don't know the answer, use one of the relevant DB facts in the prompt. Be a friendly, concise, never offensive chatbot to help users learn more about the University of Denver. Query: {query}\n"
             };
             antiPrompts = new string[] { "User:" };
             prompt_number_chosen = 0;
@@ -115,8 +119,10 @@ namespace EdgeRag
             model = LLamaWeights.LoadFromFile(modelParams);
             embedder = new LLamaEmbedder(model, modelParams);
             OnMessage?.Invoke($"Model: {fullModelName} from {selectedModelPath} loaded");
-
-            InitializeDataTable();
+            if (useDatabase)
+            {
+                InitializeDataTable();
+            }
             InitializeConversation();
         }
 
@@ -202,11 +208,10 @@ namespace EdgeRag
             {
                 float temperature = 0.25f;
                 OnMessage?.Invoke("Hello! I am your friendly DU Chatbot, how can I help you today?\n");
-                string embeddingColumnName = modelType + "Embedding";
-
                 while (true)
                 {
-                    prompt = await QueryDatabase(embeddingColumnName);
+                    string embeddingColumnName = useDatabase ? modelType + "Embedding" : string.Empty;
+                    prompt = useDatabase ? await QueryDatabase(embeddingColumnName) : await GetPromptWithoutDatabase();
                     await foreach (var text in session.ChatAsync(new ChatHistory.Message(AuthorRole.User, prompt), new InferenceParams { Temperature = temperature, AntiPrompts = antiPrompts }))
                     {
                         Console.Write(text);
@@ -248,7 +253,19 @@ namespace EdgeRag
             queried_prompt += "Answer:";
             return queried_prompt;
         }
+
+        private async Task<string> GetPromptWithoutDatabase()
+        {
+            query = await inputHandler.ReadLineAsync();
+            if (string.IsNullOrWhiteSpace(query) || query == "exit" || query == "quit") Environment.Exit(0);
+
+            // Directly return the user's query or modify as needed for your application
+            string queriedPrompt = $"User: {query}\nAnswer:";
+            return queriedPrompt;
+        }
     }
+
+
 
     public interface IInputHandler
     {
@@ -263,12 +280,19 @@ namespace EdgeRag
         }
     }
 
-
     public class RagPipelineConsole : RagPipelineBase
     {
-        public RagPipelineConsole(string directoryPath, string[] facts, uint contextSize, IInputHandler inputHandler) : base(directoryPath, facts, contextSize, inputHandler)
+        public RagPipelineConsole(string directoryPath, string[] facts, uint contextSize, IInputHandler inputHandler, bool useDatabase) : base(directoryPath, facts, contextSize, inputHandler, useDatabase)
         {
             OnMessage += Console.WriteLine;
         }
     }
+
+    public class IncidentData
+    {
+        public string IncidentNumber { get; set; }
+        public List<string> Conversation { get; set; }
+        public string Solution { get; set; }
+    }
+
 }

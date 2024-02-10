@@ -20,8 +20,9 @@
         };
             uint contextSize = 4096;
             IInputHandler inputHandler = new ConsoleInputHandler();
+            bool useDatabase = false;
 
-            var pipeline = new RagPipelineConsole(directoryPath, facts, contextSize, inputHandler);
+            var pipeline = new RagPipelineConsole(directoryPath, facts, contextSize, inputHandler, useDatabase);
             await pipeline.InitializeAsync();
             await pipeline.StartChatAsync();
         }
