@@ -38,7 +38,7 @@ namespace EdgeRag
             dt = new DataTable();
         }
 
-        public async Task InitializeAsync(IInputHandler inputHandler)
+        public async Task<ModelLoaderOutputs> InitializeAsync(IInputHandler inputHandler)
         {
             if (!Directory.Exists(directoryPath))
             {
@@ -50,7 +50,7 @@ namespace EdgeRag
             if (filePaths.Length == 0)
             {
                 onMessage?.Invoke("No models found in the directory");
-                return;
+                Environment.Exit(0);
             }
 
             bool validModelSelected = false;
@@ -95,6 +95,8 @@ namespace EdgeRag
             {
                 InitializeDataTable();
             }
+
+            return new ModelLoaderOutputs(model, modelType, embedder, modelParams, context, dt);
         }
 
         private void InitializeDataTable()
@@ -144,4 +146,27 @@ namespace EdgeRag
             onMessage += Console.WriteLine;
         }
     }
+
+    public class ModelLoaderOutputs
+    {
+        public LLamaWeights model { get; set; }
+        public LLamaEmbedder embedder { get; set; }
+        public ModelParams modelParams { get; set; }
+        public string modelType { get; set; }
+        public LLamaContext context { get; set; }
+        public DataTable embeddingsTable { get; set; }
+
+        public ModelLoaderOutputs(LLamaWeights model, string modelType, LLamaEmbedder embedder, ModelParams modelParams, LLamaContext context, DataTable embeddingsTable)
+        {
+            this.model = model;
+            this.modelType = modelType;
+            this.embedder = embedder;
+            this.modelParams = modelParams;
+            this.context = context;
+            this.embeddingsTable = embeddingsTable;
+        }
+    }
+
 }
+
+

@@ -34,17 +34,18 @@ namespace EdgeRag
         private IInputHandler inputHandler;
         public event Action<string> OnMessage = delegate { };
 
-        public ConversationLoader(IInputHandler inputHandler, LLamaWeights model, string modelType, ModelParams modelParams, LLamaEmbedder embedder, LLamaContext context, DataTable vectorDatabase, float temperature, bool useDatabase)
+        public ConversationLoader(IInputHandler inputHandler, ModelLoaderOutputs modelLoaderOutputs, float temperature, bool useDatabase)
         {
             this.inputHandler = inputHandler;
-            this.model = model;
-            this.modelParams = modelParams;
-            this.embedder = embedder;
-            this.context = context;
-            this.vectorDatabase = vectorDatabase;
+            this.model = modelLoaderOutputs.model;
+            this.modelType = modelLoaderOutputs.modelType;
+            this.modelParams = modelLoaderOutputs.modelParams;
+            this.embedder = modelLoaderOutputs.embedder;
+            this.context = modelLoaderOutputs.context;
+            this.vectorDatabase = modelLoaderOutputs.embeddingsTable;
             this.temperature = temperature;
             this.useDatabase = useDatabase;      
-            this.modelType = modelType;
+            this.modelType = modelLoaderOutputs.modelType;
 
             generatedSyntheticDataTable = new DataTable();
             generatedSyntheticDataTable.Columns.Add("Question", typeof(string));
@@ -95,35 +96,34 @@ namespace EdgeRag
                 OnMessage?.Invoke("Hello! I am your friendly DU Chatbot, how can I help you today?\n");
                 while (true)
                 {
-                    string embeddingColumnName = useDatabase ? modelType + "Embedding" : string.Empty;
+                    string embeddingColumnName = useDatabase ? $"{modelType}Embedding" : string.Empty;
                     prompt = useDatabase ? await QueryDatabase(embeddingColumnName) : await GetPromptWithoutDatabase();
-                    string currentMessage = "";
-                    await foreach (var text in session.ChatAsync(new ChatHistory.Message(AuthorRole.User, prompt), new InferenceParams { Temperature = temperature, AntiPrompts = antiPrompts }))
-                    {
-                        // Accumulate text and send it out word by word.
-                        currentMessage += text;
-                        var lastSpaceIndex = currentMessage.LastIndexOf(' ');
-                        if (lastSpaceIndex != -1) // Ensure there's at least one word to send.
-                        {
-                            // Send everything up to the last space.
-                            var messageToSend = currentMessage.Substring(0, lastSpaceIndex + 1);
-                            OnMessage?.Invoke(messageToSend);
 
-                            // Keep the remaining part that hasn't been sent.
-                            currentMessage = currentMessage.Substring(lastSpaceIndex + 1);
-                        }
-                    }
-                    // After the loop, send any remaining text not ending with a space.
-                    if (!string.IsNullOrEmpty(currentMessage))
-                    {
-                        OnMessage?.Invoke(currentMessage);
-                    }
-                    conversation += prompt;
-                    prompt = "";
+                    // Use the reusable method
+                    string response = await InteractWithModelAsync(prompt);
+
+                    // Send the complete response
+                    OnMessage?.Invoke(response);
+
+                    conversation += prompt + response; // Optionally, append both the prompt and response to the conversation history
+                    prompt = ""; // Prepare for the next iteration
                 }
             }
         }
 
+
+        private async Task<string> InteractWithModelAsync(string prompt)
+        {
+            string response = "";
+            if (session == null) return response; // Ensure the session is initialized
+
+            await foreach (var text in session.ChatAsync(new ChatHistory.Message(AuthorRole.User, prompt), new InferenceParams { Temperature = temperature, AntiPrompts = antiPrompts }))
+            {
+                response += text;
+            }
+
+            return response;
+        }
 
         // This is used for RAG, appends user query and vector db facts to system prompt
         private async Task<string> QueryDatabase(string embeddingColumnName)
@@ -172,22 +172,16 @@ namespace EdgeRag
             float questionTemperature = 0.75f; // Set the temperature for creativity
             OnMessage?.Invoke($"Generating tech support question {questionNumber}...\n");
 
-            // Themes can represent common categories of tech support issues
-            string[] themes = new string[] { "an Apple device issue", "an Android device problem", "a Windows device malfunction" };
+            string[] themes = { "an Apple device issue", "an Android device problem", "a Windows device malfunction" };
             Random rand = new Random();
-
-            // Selecting a random theme for a tech support question
             string selectedTheme = themes[rand.Next(themes.Length)];
 
-            // Crafting a prompt that asks the LLM to generate a tech support ticket question
-            // This prompt is designed to mimic the type of queries tech support might receive, focusing on common user issues.
             string llmPrompt = $"Think of a user facing a typical {selectedTheme}. Generate a detailed tech support ticket question they might ask. Include the question title, question details about the issue(s), and at most 3 troubleshooting steps they've already attempted.";
 
-            // Asking the LLM to generate a question based on the prompt
-            string generatedQuestion = await AskLLMForQuestion(llmPrompt, questionTemperature);
-
-            return generatedQuestion.Trim(); // Trim to ensure no leading/trailing whitespace
+            // Use the reusable interaction method
+            return await InteractWithModelAsync(llmPrompt).ContinueWith(task => task.Result.Trim());
         }
+
 
 
         private async Task<string> AskLLMForQuestion(string prompt, float questionTemperature)
@@ -204,35 +198,24 @@ namespace EdgeRag
         // Helper method to generate an answer for a given question using the LLM
         private async Task<string> GenerateAnswerForQuestion(string question)
         {
-            // Set the initial prompt for the LLM
-            string systemPrompt = "As Tech Support: Answer the user's tech support question";
-            string prompt = $"{systemPrompt} Question: {question}\r\nAnswer:";
-            string answer = "";
+            string systemPrompt = $"As Tech Support: Answer the user's tech support question\nQuestion: {question}\nAnswer:";
 
-            await foreach (var text in session.ChatAsync(new ChatHistory.Message(AuthorRole.User, prompt), new InferenceParams { Temperature = temperature, AntiPrompts = antiPrompts }))
-            {
-                answer += text;
-            }
-
-            return answer;
+            // Use the reusable interaction method
+            return await InteractWithModelAsync(systemPrompt);
         }
-
         public async Task GenerateAndStoreSyntheticData(int n)
         {
             for (int i = 0; i < n; i++)
             {
-                // Await the asynchronous call to generate a question
                 string syntheticQuestion = await GenerateQuestionAsync(i + 1);
                 string syntheticAnswer = await GenerateAnswerForQuestion(syntheticQuestion);
 
-                // Store the question and answer in the DataTable
                 DataRow newRow = generatedSyntheticDataTable.NewRow();
                 newRow["Question"] = syntheticQuestion;
                 newRow["Answer"] = syntheticAnswer;
                 generatedSyntheticDataTable.Rows.Add(newRow);
             }
         }
-
 
         public void PrintSyntheticDataTableHead(int n)
         {
@@ -279,7 +262,7 @@ namespace EdgeRag
 
     public class ConversationLoaderConsole : ConversationLoader
     {
-        public ConversationLoaderConsole(IInputHandler inputHandler, LLamaWeights model, string modelType, ModelParams modelParams, LLamaEmbedder embedder, LLamaContext context, DataTable dt, float temperature, bool useDatabase) : base(inputHandler, model, modelType, modelParams, embedder, context, dt, temperature, useDatabase)
+        public ConversationLoaderConsole(IInputHandler inputHandler, ModelLoaderOutputs modelLoaderOutputs, float temperature, bool useDatabase) : base(inputHandler, modelLoaderOutputs, temperature, useDatabase)
         {
             OnMessage += Console.Write;
         }

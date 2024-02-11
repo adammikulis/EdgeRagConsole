@@ -21,19 +21,19 @@ namespace EdgeRag
             "DU's library is known as the Anderson Academic Commons"
         };
             uint contextSize = 4096;
-            IInputHandler inputHandler = new ConsoleInputHandler();
+
+            IInputHandler inputHandler = new ConsoleInputHandler(); // The intention is to use this for Godot as well as C# console apps, requiring different input
             bool useDatabase = false;
             int numGpuLayers = 33; // Set to 0 for cpu-only. If you get a CUDA error, lower numGpuLayers to use less VRAM
             uint numCpuThreads = 8;
-            float temperature = 0.5f; // 0.0 is completely deterministic (can get repetitive), =>1.0 is much more random.
+            float temperature = 0.5f; // 0.0 is completely deterministic (can get repetitive), =>1.0 is much more random
             int numSyntheticDataToGenerate = 1; // Set to 0 for normal chat
 
             string syntheticDataOutputPath = @"C:\ai\data\synthetic";
             
             ModelLoaderConsole modelLoader = new ModelLoaderConsole(directoryPath, facts, contextSize, numGpuLayers, numCpuThreads, useDatabase);
-            await modelLoader.InitializeAsync(inputHandler);
-
-            ConversationLoaderConsole conversationLoader = new ConversationLoaderConsole(inputHandler, modelLoader.model, modelLoader.modelType, modelLoader.modelParams, modelLoader.embedder, modelLoader.context, modelLoader.dt, temperature, useDatabase);
+            ModelLoaderOutputs modelLoaderOutputs = await modelLoader.InitializeAsync(inputHandler);
+            ConversationLoaderConsole conversationLoader = new ConversationLoaderConsole(inputHandler, modelLoaderOutputs, temperature, useDatabase);
 
             if (numSyntheticDataToGenerate > 0)
             {
@@ -44,7 +44,6 @@ namespace EdgeRag
             {
                 await conversationLoader.StartChatAsync();
             }
-
         }
     }
 }
