@@ -12,19 +12,23 @@ namespace EdgeRag
 {
     public class SyntheticDataGenerator
     {
+        private DatabaseManager databaseManager;
         private ChatSession session;
         private IInputHandler inputHandler;
         private float temperature;
         private DataTable syntheticDataTable;
         public event Action<string> OnMessage = delegate { };
         private string[] antiPrompts;
+        private string modelType;
 
-        public SyntheticDataGenerator(ChatSession session, IInputHandler inputHandler, float temperature, string[] antiPrompts)
+        public SyntheticDataGenerator(DatabaseManager databaseManager, ChatSession session, IInputHandler inputHandler, float temperature, string[] antiPrompts)
         {
-            this.antiPrompts = antiPrompts;
+            this.databaseManager = databaseManager;
             this.session = session;
             this.inputHandler = inputHandler;
             this.temperature = temperature;
+            this.antiPrompts = antiPrompts;
+            modelType = databaseManager.ModelType;
             InitializeITSyntheticDataTable();
         }
 
@@ -39,50 +43,18 @@ namespace EdgeRag
             syntheticDataTable.Columns.Add("incidentTitle", typeof(string));
             syntheticDataTable.Columns.Add("incidentDetails", typeof(string));
             syntheticDataTable.Columns.Add("supportResponse", typeof(string));
-            syntheticDataTable.Columns.Add("userFinalResponse", typeof(string));
-        }
-
-        public string DataTableToJson(DataTable dataTable)
-        {
-            string json = JsonConvert.SerializeObject(dataTable, Formatting.Indented);
-            return json;
-        }
-
-        public DataTable JsonToDataTable(string json)
-        {
-            DataTable dataTable = JsonConvert.DeserializeObject<DataTable>(json);
-            return dataTable;
-        }
-
-        public void SaveJsonToFile(string json, string filePath)
-        {
-            // Create directory if it doesn't exist
-            string directory = Path.GetDirectoryName(filePath);
-            if (!Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            // Write the JSON string to the file
-            File.WriteAllText(filePath, json);
-        }
-
-        public string ReadJsonFromFile(string filePath)
-        {
-            // Read the JSON string from the file
-            string json = File.ReadAllText(filePath);
-            return json;
+            syntheticDataTable.Columns.Add("userSolution", typeof(string));
         }
 
         // This chains together LLM calls to build out a table of synthetic tech support data
-        public async Task<DataTable> GenerateITDataPipeline(int n)
+        public async Task<DataTable> GenerateITDataPipeline(int n, string syntheticDataOutputPath)
         {
             for (int i = 0; i < n; i++)
             {
                 OnMessage?.Invoke($"Generating item {i + 1}...\n");
                 float userTemperature = 0.75f;
                 float supportTemperature = 0.25f;
-                string[] themes = { "an Apple device", "an Android device", "a Windows device" };
+                string[] themes = { "an Apple device", "an Android device", "a Windows device", "a printer or copier", "a networking issue" };
                 Random rand = new Random();
                 string selectedTheme = themes[rand.Next(themes.Length)];
 
@@ -113,17 +85,35 @@ namespace EdgeRag
                 promptInstructions = $"Write how you solved the problem as the user based on steps: {supportResponse}";
                 string userFinalResponse = await InteractWithModelAsync(promptInstructions, supportResponse, userTemperature, antiPrompts);
                 userFinalResponse = CleanUpString(userFinalResponse);
-                newRow["userFinalResponse"] = userFinalResponse.Replace(antiPrompts[0], "");
-
-                syntheticDataTable.Rows.Add(newRow);
-            }
-            string syntheticDataOutputPath = @"C:\ai\data\synthetic\syntheticData.json";
-            string json = DataTableToJson(syntheticDataTable);
-            SaveJsonToFile(json, syntheticDataOutputPath);
+                newRow["userSolution"] = userFinalResponse.Replace(antiPrompts[0], "");
+                var embeddings = databaseManager.GenerateEmbeddings("Concatenate all of the columns here");
+                float[]? llamaEmbedding = null, mistralEmbedding = null, mixtralEmbedding = null, phiEmbedding = null;
+                switch (modelType)
+                {
+                    case "llama":
+                        llamaEmbedding = embeddings;
+                        break;
+                    case "mistral":
+                        mistralEmbedding = embeddings;
+                        break;
+                    case "mixtral":
+                        mixtralEmbedding = embeddings;
+                        break;
+                    case "phi":
+                        phiEmbedding = embeddings;
+                        break;
+                }
+            syntheticDataTable.Rows.Add(newRow);
+        }
+            syntheticDataOutputPath = $"{syntheticDataOutputPath}/syntheticData.json";
+            syntheticDataOutputPath = @syntheticDataOutputPath;
+            string json = databaseManager.DataTableToJson(syntheticDataTable);
+            databaseManager.SaveJsonToFile(json, syntheticDataOutputPath);
 
             return syntheticDataTable;
         }
 
+        // Needed for cleaner tables/JSON files
         public string CleanUpString(string input)
         {
             string cleanedString = input.Replace("Title", "")
@@ -134,39 +124,10 @@ namespace EdgeRag
                 .Replace("\t", " ")
                 .Replace("    ", " ")
                 .Replace("   ", " ")
-                .Replace("  ", " ");
+                .Replace("  ", " ")
+                .Trim();
 
             return cleanedString;
-        }
-
-
-        public void PrintSyntheticDataTable(int n)
-        {
-            // Check if the DataTable has any rows
-            if (syntheticDataTable.Rows.Count == 0)
-            {
-                OnMessage?.Invoke("DataTable is empty.");
-                return;
-            }
-            OnMessage?.Invoke("\n");
-            // Print column headers
-            foreach (DataColumn column in syntheticDataTable.Columns)
-            {
-                OnMessage?.Invoke($"{column.ColumnName}\t");
-            }
-            OnMessage?.Invoke("\n");
-
-            // Iterate over the first n rows or the total number of rows, whichever is smaller
-            int rowsToPrint = Math.Min(n, syntheticDataTable.Rows.Count);
-            for (int i = 0; i < rowsToPrint; i++)
-            {
-                // Print each column's value for the current row
-                foreach (DataColumn column in syntheticDataTable.Columns)
-                {
-                    OnMessage?.Invoke($"{syntheticDataTable.Rows[i][column]}\t");
-                }
-                OnMessage?.Invoke("\n"); // Move to the next line after printing all columns for a row
-            }
         }
 
         private async Task<string> InteractWithModelAsync(string promptInstructions, string prompt, float temperature, string[] antiPrompts)

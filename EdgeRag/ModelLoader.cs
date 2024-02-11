@@ -9,10 +9,8 @@ namespace EdgeRag
 {
     public class ModelLoader
     {
-        private bool useDatabase;
         private string directoryPath;
         private uint contextSize;
-        private string[] facts;
         protected int numGpuLayers;
         protected uint numCpuThreads;
         public string SelectedModelPath { get; private set; }
@@ -26,16 +24,13 @@ namespace EdgeRag
         public event Action<string> onMessage = delegate { };
 
 
-        public ModelLoader(string directoryPath, string[] facts, uint contextSize, int num_gpu_layers, uint numCpuThreads, bool useDatabase)
+        public ModelLoader(string directoryPath, uint contextSize, int num_gpu_layers, uint numCpuThreads)
         {
             this.directoryPath = directoryPath;
-            this.useDatabase = useDatabase;
             this.contextSize = contextSize;
             this.numGpuLayers = num_gpu_layers;
             this.numCpuThreads = numCpuThreads;
-            this.facts = facts;
             SelectedModelPath = "";
-            dt = new DataTable();
         }
 
         public async Task<ModelLoaderOutputs> InitializeAsync(IInputHandler inputHandler)
@@ -91,57 +86,13 @@ namespace EdgeRag
             context = model.CreateContext(modelParams);
             onMessage?.Invoke($"Model: {fullModelName} from {SelectedModelPath} loaded");
 
-            if (useDatabase && embedder != null)
-            {
-                InitializeDataTable();
-            }
-
             return new ModelLoaderOutputs(model, modelType, embedder, modelParams, context, dt);
-        }
-
-        private void InitializeDataTable()
-        {
-            dt.Columns.Add("llamaEmbedding", typeof(float[]));
-            dt.Columns.Add("mistralEmbedding", typeof(float[]));
-            dt.Columns.Add("mixtralEmbedding", typeof(float[]));
-            dt.Columns.Add("phiEmbedding", typeof(float[]));
-            dt.Columns.Add("originalText", typeof(string));
-
-            onMessage?.Invoke("\nEmbedding facts with LLM in vector database, please wait.\n");
-
-            foreach (var fact in facts)
-            {
-                var embeddings = embedder.GetEmbeddings(fact);
-                float[]? llamaEmbedding = null, mistralEmbedding = null, mixtralEmbedding = null, phiEmbedding = null;
-
-                switch (modelType)
-                {
-                    case "llama":
-                        llamaEmbedding = embeddings;
-                        break;
-                    case "mistral":
-                        mistralEmbedding = embeddings;
-                        break;
-                    case "mixtral":
-                        mixtralEmbedding = embeddings;
-                        break;
-                    case "phi":
-                        phiEmbedding = embeddings;
-                        break;
-                    default:
-                        onMessage?.Invoke($"Unsupported model type: {modelType}");
-                        break;
-                }
-
-                dt.Rows.Add(llamaEmbedding, mistralEmbedding, mixtralEmbedding, phiEmbedding, fact);
-            }
-            onMessage?.Invoke("Facts embedded!");
         }
     }
 
     public class ModelLoaderConsole : ModelLoader
     {
-        public ModelLoaderConsole(string directoryPath, string[] facts, uint contextSize, int numGpuLayers, uint numCpuThreads, bool useDatabase) : base(directoryPath, facts, contextSize, numGpuLayers, numCpuThreads, useDatabase)
+        public ModelLoaderConsole(string directoryPath, uint contextSize, int numGpuLayers, uint numCpuThreads) : base(directoryPath, contextSize, numGpuLayers, numCpuThreads)
         {
             onMessage += Console.WriteLine;
         }
