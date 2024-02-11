@@ -50,7 +50,7 @@ namespace EdgeRag
             this.databaseManager = databaseManager;
 
             systemMessages = new string[] {
-                "Reply in a natural manner and utilize your existing knowledge. If you don't know the answer, use one of the relevant DB facts in the prompt. Be a friendly, concise, never offensive chatbot to help users learn more about the University of Denver. Query: {query}\n"
+                $"Reply in a natural manner and utilize your existing knowledge. If you don't know the answer, use one of the relevant DB facts in the prompt. Be a friendly, concise, never offensive chatbot. Query: {query}\n"
             };
             prompt_number_chosen = 0;
             query = "";
@@ -70,7 +70,10 @@ namespace EdgeRag
             context = model.CreateContext(modelParams);
             executor = new InteractiveExecutor(context);
             session = new ChatSession(executor);
-            syntheticDataGenerator = new SyntheticDataGenerator(databaseManager, session, inputHandler, temperature, antiPrompts);
+            if (databaseManager != null)
+            {
+                syntheticDataGenerator = new SyntheticDataGenerator(databaseManager, session, inputHandler, temperature, antiPrompts);
+            }
         }
 
         public async Task StartChatAsync(string promptInstructions, string prompt)
@@ -80,15 +83,16 @@ namespace EdgeRag
                 OnMessage?.Invoke("Chat session started, please input query:\n");
                 while (true)
                 {
-                    query = await inputHandler.ReadLineAsync();
-                    
+                    string userQuery = await inputHandler.ReadLineAsync();
+
+                    // Check for null before using databaseManager
                     if (databaseManager != null)
                     {
-                        prompt = await databaseManager.QueryDatabase(query, numTopMatches);
+                        prompt = await databaseManager.QueryDatabase(userQuery, numTopMatches);
                     }
                     else
                     {
-                        prompt = await GetPromptWithoutDatabase(query);
+                        prompt = await GetPromptWithoutDatabase(userQuery);
                     }
 
                     string response = await InteractWithModelAsync(promptInstructions, prompt, temperature, antiPrompts);
@@ -97,6 +101,7 @@ namespace EdgeRag
                 }
             }
         }
+
 
         private async Task<string> InteractWithModelAsync(string promptInstructions, string prompt, float temperature, string[] antiPrompts)
         {

@@ -47,7 +47,7 @@ namespace EdgeRag
         }
 
         // This chains together LLM calls to build out a table of synthetic tech support data
-        public async Task<DataTable> GenerateITDataPipeline(int n, string syntheticDataOutputPath)
+        public async Task<DataTable> GenerateITDataPipeline(int n, string databaseJsonPath)
         {
             for (int i = 0; i < n; i++)
             {
@@ -104,11 +104,9 @@ namespace EdgeRag
                         break;
                 }
             syntheticDataTable.Rows.Add(newRow);
-        }
-            syntheticDataOutputPath = $"{syntheticDataOutputPath}/syntheticData.json";
-            syntheticDataOutputPath = @syntheticDataOutputPath;
+            }
             string json = databaseManager.DataTableToJson(syntheticDataTable);
-            databaseManager.SaveJsonToFile(json, syntheticDataOutputPath);
+            databaseManager.SaveJsonToFile(json, databaseJsonPath);
 
             return syntheticDataTable;
         }
