@@ -22,16 +22,29 @@ namespace EdgeRag
         };
             uint contextSize = 4096;
             IInputHandler inputHandler = new ConsoleInputHandler();
-            bool useDatabase = true;
-            bool generateSyntheticData = false; // This creates a chat session that generates synthetic data based on user parameters
+            bool useDatabase = false;
+            int numGpuLayers = 33; // Set to 0 for cpu-only. If you get a CUDA error, lower numGpuLayers to use less VRAM
+            uint numCpuThreads = 8;
+            float temperature = 0.5f; // 0.0 is completely deterministic (can get repetitive), =>1.0 is much more random.
+            int numSyntheticDataToGenerate = 1; // Set to 0 for normal chat
 
             string syntheticDataOutputPath = @"C:\ai\data\synthetic";
             
-            ModelLoaderConsole modelLoader = new ModelLoaderConsole(directoryPath, facts, contextSize, useDatabase);
+            ModelLoaderConsole modelLoader = new ModelLoaderConsole(directoryPath, facts, contextSize, numGpuLayers, numCpuThreads, useDatabase);
             await modelLoader.InitializeAsync(inputHandler);
 
-            ConversationLoaderConsole conversationLoader = new ConversationLoaderConsole(inputHandler, modelLoader.model, modelLoader.modelType, modelLoader.modelParams, modelLoader.embedder, modelLoader.context, modelLoader.dt, useDatabase, generateSyntheticData);
-            await conversationLoader.StartChatAsync();
+            ConversationLoaderConsole conversationLoader = new ConversationLoaderConsole(inputHandler, modelLoader.model, modelLoader.modelType, modelLoader.modelParams, modelLoader.embedder, modelLoader.context, modelLoader.dt, temperature, useDatabase);
+
+            if (numSyntheticDataToGenerate > 0)
+            {
+                conversationLoader.GenerateAndStoreSyntheticData(numSyntheticDataToGenerate).Wait();
+                conversationLoader.PrintSyntheticDataTableHead(numSyntheticDataToGenerate);
+            }
+            else
+            {
+                await conversationLoader.StartChatAsync();
+            }
+
         }
     }
 }

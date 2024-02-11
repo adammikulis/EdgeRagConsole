@@ -13,8 +13,8 @@ namespace EdgeRag
         private string directoryPath;
         private uint contextSize;
         private string[] facts;
-        protected int num_gpu_layers;
-        protected uint num_cpu_threads;
+        protected int numGpuLayers;
+        protected uint numCpuThreads;
         public string SelectedModelPath { get; private set; }
         public string? fullModelName { get; private set; }
         public string? modelType { get; private set; }
@@ -26,13 +26,13 @@ namespace EdgeRag
         public event Action<string> onMessage = delegate { };
 
 
-        public ModelLoader(string directoryPath, string[] facts, uint contextSize, bool useDatabase)
+        public ModelLoader(string directoryPath, string[] facts, uint contextSize, int num_gpu_layers, uint numCpuThreads, bool useDatabase)
         {
             this.directoryPath = directoryPath;
             this.useDatabase = useDatabase;
             this.contextSize = contextSize;
-            num_gpu_layers = 16; // Put to 0 for no GPU
-            num_cpu_threads = 8;
+            this.numGpuLayers = num_gpu_layers;
+            this.numCpuThreads = numCpuThreads;
             this.facts = facts;
             SelectedModelPath = "";
             dt = new DataTable();
@@ -82,8 +82,8 @@ namespace EdgeRag
             {
                 ContextSize = contextSize,
                 EmbeddingMode = true, // Needs to be true to retrieve embeddings
-                GpuLayerCount = num_gpu_layers, // Assuming a default value or this can be passed as a parameter
-                Threads = num_cpu_threads // Assuming a default value or this can be passed as a parameter
+                GpuLayerCount = numGpuLayers, // Assuming a default value or this can be passed as a parameter
+                Threads = numCpuThreads // Assuming a default value or this can be passed as a parameter
             };
 
             model = LLamaWeights.LoadFromFile(modelParams);
@@ -139,7 +139,7 @@ namespace EdgeRag
 
     public class ModelLoaderConsole : ModelLoader
     {
-        public ModelLoaderConsole(string directoryPath, string[] facts, uint contextSize, bool useDatabase) : base(directoryPath, facts, contextSize, useDatabase)
+        public ModelLoaderConsole(string directoryPath, string[] facts, uint contextSize, int numGpuLayers, uint numCpuThreads, bool useDatabase) : base(directoryPath, facts, contextSize, numGpuLayers, numCpuThreads, useDatabase)
         {
             onMessage += Console.WriteLine;
         }
