@@ -1,6 +1,8 @@
 ﻿using LLama;
 using LLama.Common;
 using System.Data;
+using Newtonsoft.Json;
+using System.IO;
 
 namespace EdgeRag
 {
@@ -13,7 +15,7 @@ namespace EdgeRag
         protected string? modelType;
         protected string[]? facts;
         protected uint? contextSize;
-        protected string[] prompts;
+        protected string[] systemMessages;
         private string[] antiPrompts;
         private float temperature;
         protected int prompt_number_chosen;
@@ -30,7 +32,7 @@ namespace EdgeRag
         protected ChatSession? session;
 
         protected DataTable vectorDatabase { get; private set; }
-        protected DataTable generatedSyntheticDataTable { get; private set; }
+        protected DataTable generatedITSyntheticDataTable { get; private set; }
         private IInputHandler inputHandler;
         public event Action<string> OnMessage = delegate { };
 
@@ -47,13 +49,8 @@ namespace EdgeRag
             this.useDatabase = useDatabase;      
             this.modelType = modelLoaderOutputs.modelType;
 
-            generatedSyntheticDataTable = new DataTable();
-            generatedSyntheticDataTable.Columns.Add("Question", typeof(string));
-            generatedSyntheticDataTable.Columns.Add("Answer", typeof(string));
-
-
             // Still haven't figured out a prompt that allows the network to use its existing knowledge and not just the DB Facts
-            prompts = new string[] {
+            systemMessages = new string[] {
                 $"Reply in a natural manner and utilize your existing knowledge. If you don't know the answer, use one of the relevant DB facts in the prompt. Be a friendly, concise, never offensive chatbot to help users learn more about the University of Denver. Query: {query}\n"
             };
             antiPrompts = new string[] { "User:" };
@@ -63,6 +60,7 @@ namespace EdgeRag
             conversation = "";
             num_top_matches = 3;
             InitializeConversation();
+            InitializeITSyntheticDataTable();
         }
 
         protected void InitializeConversation()
@@ -89,47 +87,43 @@ namespace EdgeRag
             }
         }
 
-        public async Task StartChatAsync()
+        public async Task StartChatAsync(string promptInstructions, string prompt)
         {
             if (session != null)
             {
-                OnMessage?.Invoke("Hello! I am your friendly DU Chatbot, how can I help you today?\n");
+                OnMessage?.Invoke("Chat session started, please input query:\n");
                 while (true)
                 {
                     string embeddingColumnName = useDatabase ? $"{modelType}Embedding" : string.Empty;
                     prompt = useDatabase ? await QueryDatabase(embeddingColumnName) : await GetPromptWithoutDatabase();
 
                     // Use the reusable method
-                    string response = await InteractWithModelAsync(prompt);
+                    string response = await InteractWithModelAsync(promptInstructions, prompt, temperature);
 
                     // Send the complete response
                     OnMessage?.Invoke(response);
 
-                    conversation += prompt + response; // Optionally, append both the prompt and response to the conversation history
-                    prompt = ""; // Prepare for the next iteration
+                    conversation += prompt + " " + response;
                 }
             }
         }
-
-
-        private async Task<string> InteractWithModelAsync(string prompt)
+        private async Task<string> InteractWithModelAsync(string promptInstructions, string prompt,  float temperature)
         {
             string response = "";
-            if (session == null) return response; // Ensure the session is initialized
-
+            if (session == null) return "Session still initializing, please wait.\n"; // Ensure the session is initialized
+            prompt = $"{promptInstructions} { prompt }";
             await foreach (var text in session.ChatAsync(new ChatHistory.Message(AuthorRole.User, prompt), new InferenceParams { Temperature = temperature, AntiPrompts = antiPrompts }))
             {
                 response += text;
             }
-
-            return response;
+            return response.Trim();
         }
 
         // This is used for RAG, appends user query and vector db facts to system prompt
         private async Task<string> QueryDatabase(string embeddingColumnName)
         {
             // How many matches to present to the LLM in its prompt
-            string queried_prompt = prompts[prompt_number_chosen];
+            string queried_prompt = systemMessages[prompt_number_chosen];
 
 
             query = await inputHandler.ReadLineAsync();
@@ -167,80 +161,116 @@ namespace EdgeRag
             return queriedPrompt;
         }
 
-        private async Task<string> GenerateQuestionAsync(int questionNumber)
+        public string DataTableToJson(DataTable dataTable)
         {
-            float questionTemperature = 0.75f; // Set the temperature for creativity
-            OnMessage?.Invoke($"Generating tech support question {questionNumber}...\n");
-
-            string[] themes = { "an Apple device issue", "an Android device problem", "a Windows device malfunction" };
-            Random rand = new Random();
-            string selectedTheme = themes[rand.Next(themes.Length)];
-
-            string llmPrompt = $"Think of a user facing a typical {selectedTheme}. Generate a detailed tech support ticket question they might ask. Include the question title, question details about the issue(s), and at most 3 troubleshooting steps they've already attempted.";
-
-            // Use the reusable interaction method
-            return await InteractWithModelAsync(llmPrompt).ContinueWith(task => task.Result.Trim());
+            string json = JsonConvert.SerializeObject(dataTable, Formatting.Indented);
+            return json;
         }
 
-
-
-        private async Task<string> AskLLMForQuestion(string prompt, float questionTemperature)
+        public DataTable JsonToDataTable(string json)
         {
-            string question = "";
-            // Assuming session.ChatAsync is the way you interact with the LLM
-            await foreach (var text in session.ChatAsync(new ChatHistory.Message(AuthorRole.User, prompt), new InferenceParams { Temperature = questionTemperature, AntiPrompts = antiPrompts }))
+            DataTable dataTable = JsonConvert.DeserializeObject<DataTable>(json);
+            return dataTable;
+        }
+
+        public void SaveJsonToFile(string json, string filePath)
+        {
+            // Create directory if it doesn't exist
+            string directory = Path.GetDirectoryName(filePath);
+            if (!Directory.Exists(directory))
             {
-                question += text;
+                Directory.CreateDirectory(directory);
             }
-            return question.Trim();
+
+            // Write the JSON string to the file
+            File.WriteAllText(filePath, json);
         }
 
-        // Helper method to generate an answer for a given question using the LLM
-        private async Task<string> GenerateAnswerForQuestion(string question)
+        public string ReadJsonFromFile(string filePath)
         {
-            string systemPrompt = $"As Tech Support: Answer the user's tech support question\nQuestion: {question}\nAnswer:";
-
-            // Use the reusable interaction method
-            return await InteractWithModelAsync(systemPrompt);
+            // Read the JSON string from the file
+            string json = File.ReadAllText(filePath);
+            return json;
         }
-        public async Task GenerateAndStoreSyntheticData(int n)
+
+        private void InitializeITSyntheticDataTable()
+        {
+            generatedITSyntheticDataTable = new DataTable();
+            generatedITSyntheticDataTable.Columns.Add("incidentNumber", typeof(int));
+            generatedITSyntheticDataTable.Columns.Add("incidentTitle", typeof(string));
+            generatedITSyntheticDataTable.Columns.Add("incidentDetails", typeof(string));
+            generatedITSyntheticDataTable.Columns.Add("supportResponse", typeof(string));
+            generatedITSyntheticDataTable.Columns.Add("userFinalResponse", typeof(string));
+        }
+
+        public async Task<DataTable> GenerateITDataPipeline(int n)
         {
             for (int i = 0; i < n; i++)
             {
-                string syntheticQuestion = await GenerateQuestionAsync(i + 1);
-                string syntheticAnswer = await GenerateAnswerForQuestion(syntheticQuestion);
+                OnMessage?.Invoke($"Generating item {i + 1}...\n");
+                float userTemperature = 0.75f;
+                float supportTemperature = 0.25f;
+                string[] themes = { "an Apple device issue", "an Android device problem", "a Windows device malfunction" };
+                Random rand = new Random();
+                string selectedTheme = themes[rand.Next(themes.Length)];
+                
+                DataRow newRow = generatedITSyntheticDataTable.NewRow();
+                newRow["incidentNumber"] = i + 1; // Increment for each incident
 
-                DataRow newRow = generatedSyntheticDataTable.NewRow();
-                newRow["Question"] = syntheticQuestion;
-                newRow["Answer"] = syntheticAnswer;
-                generatedSyntheticDataTable.Rows.Add(newRow);
+                // Generates initial incident report title
+                string prompt = "";
+                string promptInstructions = $"Generate an incident report title for {selectedTheme} a user may submit to the IT Help Desk. Do not say Incident Report Title";
+                string incidentTitle = await InteractWithModelAsync(promptInstructions, prompt, userTemperature);
+                newRow["incidentTitle"] = incidentTitle;
+
+                // Generate incident details based on the incident
+                promptInstructions = $"Generate tech support incident details for {incidentTitle} using no more than 50 words";
+                string incidentDetails = await InteractWithModelAsync(promptInstructions, incidentTitle, userTemperature);
+                newRow["incidentDetails"] = incidentDetails;
+
+                // Generate IT support's response
+                promptInstructions = $"As Tech Support: Answer the user's tech support incident civily using no more than 100 words: {incidentDetails} ";
+                string supportResponse = await InteractWithModelAsync(promptInstructions, incidentDetails, supportTemperature);
+                newRow["supportResponse"] = supportResponse;
+
+                // Generate user's final response based on IT support's help
+                promptInstructions = $"As the user only, troubleshoot based on the supplied steps and respond with what the solution ended up as the final message using no more than 50 words. Steps: {supportResponse}";
+                string userFinalResponse = await InteractWithModelAsync(promptInstructions, supportResponse, userTemperature);
+                newRow["userFinalResponse"] = userFinalResponse;
+
+                generatedITSyntheticDataTable.Rows.Add(newRow);
             }
+            string syntheticDataOutputPath = @"C:\ai\data\synthetic\syntheticData.json";
+            string json = DataTableToJson(generatedITSyntheticDataTable);
+            SaveJsonToFile(json, syntheticDataOutputPath);
+
+            return generatedITSyntheticDataTable;
         }
 
-        public void PrintSyntheticDataTableHead(int n)
+        public void PrintSyntheticDataTable(int n)
         {
             // Check if the DataTable has any rows
-            if (generatedSyntheticDataTable.Rows.Count == 0)
+            if (generatedITSyntheticDataTable.Rows.Count == 0)
             {
                 OnMessage?.Invoke("DataTable is empty.");
                 return;
             }
             OnMessage?.Invoke("\n");
             // Print column headers
-            foreach (DataColumn column in generatedSyntheticDataTable.Columns)
+            foreach (DataColumn column in generatedITSyntheticDataTable.Columns)
             {
                 OnMessage?.Invoke($"{column.ColumnName}\t");
             }
             OnMessage?.Invoke("\n");
 
             // Iterate over the first n rows or the total number of rows, whichever is smaller
-            int rowsToPrint = Math.Min(n, generatedSyntheticDataTable.Rows.Count);
+            int rowsToPrint = Math.Min(n, generatedITSyntheticDataTable.Rows.Count);
             for (int i = 0; i < rowsToPrint; i++)
             {
                 // Print each column's value for the current row
-                foreach (DataColumn column in generatedSyntheticDataTable.Columns)
+                foreach (DataColumn column in generatedITSyntheticDataTable.Columns)
                 {
-                    OnMessage?.Invoke($"{generatedSyntheticDataTable.Rows[i][column]}\t");
+                    OnMessage?.Invoke($"{generatedITSyntheticDataTable.Rows[i][column]}\t");
                 }
                 OnMessage?.Invoke("\n"); // Move to the next line after printing all columns for a row
             }

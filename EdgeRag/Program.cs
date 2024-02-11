@@ -1,4 +1,7 @@
-﻿using LLama;
+﻿// Note: Use a Mistral 0.2v 7B model for best results. Llama2 is inconsistent, Mixtral loads but gives nonsense results.
+
+using LLama;
+using System.Data;
 
 namespace EdgeRag
 {
@@ -37,12 +40,12 @@ namespace EdgeRag
 
             if (numSyntheticDataToGenerate > 0)
             {
-                conversationLoader.GenerateAndStoreSyntheticData(numSyntheticDataToGenerate).Wait();
-                conversationLoader.PrintSyntheticDataTableHead(numSyntheticDataToGenerate);
+                conversationLoader.GenerateITDataPipeline(numSyntheticDataToGenerate).Wait();
+                conversationLoader.PrintSyntheticDataTable(numSyntheticDataToGenerate);
             }
             else
             {
-                await conversationLoader.StartChatAsync();
+                await conversationLoader.StartChatAsync("","");
             }
         }
     }
