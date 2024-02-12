@@ -1,6 +1,7 @@
 ﻿using LLama;
 using System;
 using System.Threading.Tasks;
+using static System.Collections.Specialized.BitVector32;
 
 namespace EdgeRag
 {
@@ -18,22 +19,25 @@ namespace EdgeRag
 
             string[] systemMessage = { $"You are a chatbot who needs to solve the user's query by giving many detailed steps" };
 
+            uint seed = 1;
             uint contextSize = 4096;
             int maxTokens = 256;
             int numGpuLayers = 33; // Adjust based on VRAM capability
             uint numCpuThreads = 8;
             float temperature = 0.5f; // Adjust as needed
-            string[] antiPrompts = { "<endtoken>" };
+            
+            string[] antiPrompts = { "<end>" };
             
             IInputHandler inputHandler = new ConsoleInputHandler();
 
             // Initialize ModelLoader and load model
-            ModelLoaderConsole modelLoader = new ModelLoaderConsole(modelDirectoryPath, contextSize, numGpuLayers, numCpuThreads);
+            ModelLoaderConsole modelLoader = new ModelLoaderConsole(modelDirectoryPath, seed, contextSize, numGpuLayers, numCpuThreads);
             ModelLoaderOutputs modelLoaderOutputs = await modelLoader.InitializeAsync(inputHandler);
 
             // Initialize DatabaseManager if useDatabase is true
             ConversationManagerConsole conversationManager = null;
             DatabaseManager databaseManager = null;
+            SyntheticDataGenerator syntheticDataGenerator = null;
 
             if (numSyntheticDataToGenerate > 0) useDatabase = true;
 
@@ -43,16 +47,17 @@ namespace EdgeRag
                 await databaseManager.InitializeDatabaseAsync();
                 // Initialize ConversationLoader with DatabaseManager if needed
                 conversationManager = new ConversationManagerConsole(inputHandler, modelLoaderOutputs, databaseManager, maxTokens, temperature, antiPrompts, numTopMatches);
+                syntheticDataGenerator = new SyntheticDataGenerator(databaseManager, conversationManager, maxTokens, antiPrompts);
+
 
                 // Synthetic data generation or start chat based on numSyntheticDataToGenerate
                 if (numSyntheticDataToGenerate > 0)
                 {
-                    conversationManager.syntheticDataGenerator.GenerateITDataPipeline(numSyntheticDataToGenerate, databaseJsonPath).Wait();
+                    syntheticDataGenerator.GenerateITDataPipeline(numSyntheticDataToGenerate, databaseJsonPath).Wait();
                     if (useChat)
                     {
                         await conversationManager.StartChatAsync(systemMessage[0], "");
                     }
-                        
                 }
                 else if (useChat)
                 {

@@ -13,6 +13,7 @@ namespace EdgeRag
         private uint contextSize;
         protected int numGpuLayers;
         protected uint numCpuThreads;
+        protected uint seed;
         public string SelectedModelPath { get; private set; }
         public string? fullModelName { get; private set; }
         public string? modelType { get; private set; }
@@ -23,12 +24,13 @@ namespace EdgeRag
         public event Action<string> onMessage = delegate { };
 
 
-        public ModelManager(string directoryPath, uint contextSize, int num_gpu_layers, uint numCpuThreads)
+        public ModelManager(string directoryPath, uint seed, uint contextSize, int num_gpu_layers, uint numCpuThreads)
         {
             this.directoryPath = directoryPath;
             this.contextSize = contextSize;
             this.numGpuLayers = num_gpu_layers;
             this.numCpuThreads = numCpuThreads;
+            this.seed = seed;
             SelectedModelPath = "";
         }
 
@@ -74,6 +76,7 @@ namespace EdgeRag
 
             modelParams = new ModelParams(SelectedModelPath)
             {
+                Seed = seed,
                 ContextSize = contextSize,
                 EmbeddingMode = true, // Needs to be true to retrieve embeddings
                 GpuLayerCount = numGpuLayers,
@@ -91,7 +94,7 @@ namespace EdgeRag
 
     public class ModelLoaderConsole : ModelManager
     {
-        public ModelLoaderConsole(string directoryPath, uint contextSize, int numGpuLayers, uint numCpuThreads) : base(directoryPath, contextSize, numGpuLayers, numCpuThreads)
+        public ModelLoaderConsole(string directoryPath, uint seed, uint contextSize, int numGpuLayers, uint numCpuThreads) : base(directoryPath, seed, contextSize, numGpuLayers, numCpuThreads)
         {
             onMessage += Console.WriteLine;
         }

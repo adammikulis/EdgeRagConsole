@@ -30,7 +30,6 @@ namespace EdgeRag
         protected InteractiveExecutor? executor;
         protected ChatSession? session;
         public DatabaseManager? databaseManager; 
-        public SyntheticDataGenerator? syntheticDataGenerator;
 
         private IInputHandler inputHandler;
         public event Action<string> OnMessage = delegate { };
@@ -66,10 +65,6 @@ namespace EdgeRag
             context = model.CreateContext(modelParams);
             executor = new InteractiveExecutor(context);
             session = new ChatSession(executor);
-            if (databaseManager != null)
-            {
-                syntheticDataGenerator = new SyntheticDataGenerator(databaseManager, session, maxTokens, antiPrompts);
-            }
         }
 
         public async Task StartChatAsync(string systemMessage, string prompt)
@@ -107,6 +102,22 @@ namespace EdgeRag
             }
         }
 
+        public string CleanUpString(string input)
+        {
+            string cleanedString = input.Replace(antiPrompts[0], "")
+                .Replace("Narrator:", "")
+                .Replace("AI:", "")
+                .Replace("\n", " ")
+                .Replace("\r", " ")
+                .Replace("     ", " ")
+                .Replace("    ", " ")
+                .Replace("   ", " ")
+                .Replace("  ", " ")
+                .Trim();
+
+            return cleanedString;
+        }
+
         private async Task<string> InteractWithModelAsync(string promptInstructions, string prompt, int maxTokens, float temperature, string[] antiPrompts)
         {
             string response = "";
@@ -131,11 +142,6 @@ namespace EdgeRag
         {
             string queriedPrompt = $"User: {userQuery}\nResponse:";
             return Task.FromResult(queriedPrompt);
-        }
-
-        public SyntheticDataGenerator SyntheticDataGenerator
-        {
-            get { return syntheticDataGenerator; }
         }
     }
 

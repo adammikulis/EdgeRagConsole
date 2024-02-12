@@ -32,11 +32,11 @@ namespace EdgeRag
 
         public async Task InitializeDatabaseAsync()
         {
-            vectorDatabase.Columns.Add(embeddingColumnName, typeof(double[]));
             vectorDatabase.Columns.Add("incidentNumber", typeof(long));
             vectorDatabase.Columns.Add("incidentDetails", typeof(string));
             vectorDatabase.Columns.Add("incidentResponse", typeof(string));
             vectorDatabase.Columns.Add("incidentSolution", typeof(string));
+            vectorDatabase.Columns.Add(embeddingColumnName, typeof(double[]));
 
             // Check if the database JSON file exists; if not, initialize a new DataTable
             if (File.Exists(jsonDbPath))
@@ -54,8 +54,6 @@ namespace EdgeRag
             double[] embeddingsDouble = embeddingsFloat.Select(f => (double)f).ToArray();
             return embeddingsDouble;
         }
-
-
 
         public async Task<string> QueryDatabase(string query, int numTopMatches)
         {
@@ -83,7 +81,6 @@ namespace EdgeRag
             return queriedPrompt;
         }
 
-
         public string DataTableToJson(DataTable dataTable)
         {
             return JsonConvert.SerializeObject(dataTable, Formatting.Indented);
@@ -91,15 +88,9 @@ namespace EdgeRag
 
         public DataTable JsonToDataTable(string json)
         {
-            var settings = new JsonSerializerSettings
-            {
-                // Add the FloatArrayConverter to the Converters list
-                Converters = { new FloatArrayConverter() }
-            };
-
             try
             {
-                return JsonConvert.DeserializeObject<DataTable>(json, settings);
+                return JsonConvert.DeserializeObject<DataTable>(json);
             }
             catch
             {
@@ -107,7 +98,7 @@ namespace EdgeRag
             }
         }
 
-        public void SaveJsonToFile(string json, string filePath, bool overwrite)
+        public void SaveJsonToFile(string json, string filePath)
         {
             string directory = Path.GetDirectoryName(filePath);
             if (!Directory.Exists(directory))
@@ -115,18 +106,9 @@ namespace EdgeRag
                 Directory.CreateDirectory(directory);
             }
 
-            if (File.Exists(filePath) && overwrite)
+            if (File.Exists(filePath))
             {
-                // Overwrite the existing file with the new JSON data
                 File.WriteAllText(filePath, json);
-            }
-            else if (File.Exists(filePath))
-            {
-                // Append the new JSON data to the existing file
-                using (StreamWriter file = File.AppendText(filePath))
-                {
-                    file.WriteLine(json);
-                }
             }
             else
             {
@@ -138,30 +120,6 @@ namespace EdgeRag
         public string ReadJsonFromFile(string filePath)
         {
             return File.Exists(filePath) ? File.ReadAllText(filePath) : string.Empty;
-        }
-
-        public class FloatArrayConverter : JsonConverter
-        {
-            public override bool CanConvert(Type objectType)
-            {
-                return (objectType == typeof(float[]));
-            }
-
-            public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
-            {
-                JArray array = JArray.Load(reader);
-                float[] floats = new float[array.Count];
-                for (int i = 0; i < array.Count; i++)
-                {
-                    floats[i] = (float)array[i].ToObject<double>();
-                }
-                return floats;
-            }
-
-            public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
-            {
-                serializer.Serialize(writer, value);
-            }
         }
     }
 }
