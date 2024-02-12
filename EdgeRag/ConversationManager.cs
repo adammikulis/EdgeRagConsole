@@ -21,6 +21,7 @@ namespace EdgeRag
         protected string query;
         protected string prompt;
         protected int numTopMatches;
+        protected int maxTokens;
 
         protected LLamaWeights? model;
         protected ModelParams? modelParams;
@@ -34,7 +35,7 @@ namespace EdgeRag
         private IInputHandler inputHandler;
         public event Action<string> OnMessage = delegate { };
 
-        public ConversationManager(IInputHandler inputHandler, ModelLoaderOutputs modelLoaderOutputs, DatabaseManager? databaseManager, float temperature, string[] antiPrompts, int numTopMatches)
+        public ConversationManager(IInputHandler inputHandler, ModelLoaderOutputs modelLoaderOutputs, DatabaseManager? databaseManager, int maxTokens, float temperature, string[] antiPrompts, int numTopMatches)
         {
             this.inputHandler = inputHandler;
             this.model = modelLoaderOutputs.model;
@@ -42,14 +43,12 @@ namespace EdgeRag
             this.modelParams = modelLoaderOutputs.modelParams;
             this.embedder = modelLoaderOutputs.embedder;
             this.context = modelLoaderOutputs.context;
+            this.maxTokens = maxTokens;
             this.temperature = temperature;
             this.antiPrompts = antiPrompts;
             this.numTopMatches = numTopMatches;
             this.databaseManager = databaseManager;
 
-            systemMessages = new string[] {
-                $"You are a chatbot who needs to solve the user's query by giving many detailed steps"
-            };
             prompt_number_chosen = 0;
             query = "";
             prompt = "";
@@ -69,11 +68,11 @@ namespace EdgeRag
             session = new ChatSession(executor);
             if (databaseManager != null)
             {
-                syntheticDataGenerator = new SyntheticDataGenerator(databaseManager, session, antiPrompts);
+                syntheticDataGenerator = new SyntheticDataGenerator(databaseManager, session, maxTokens, antiPrompts);
             }
         }
 
-        public async Task StartChatAsync(string promptInstructions, string prompt)
+        public async Task StartChatAsync(string systemMessage, string prompt)
         {
             if (session != null)
             {
@@ -101,23 +100,31 @@ namespace EdgeRag
                         prompt = await GetPromptWithoutDatabase(userQuery);
                     }
 
-                    string response = await InteractWithModelAsync(promptInstructions, prompt, temperature, antiPrompts);
+                    string response = await InteractWithModelAsync(systemMessage, prompt, maxTokens, temperature, antiPrompts);
                     OnMessage?.Invoke(response);
                     conversation += prompt + " " + response;
                 }
             }
         }
 
-        private async Task<string> InteractWithModelAsync(string promptInstructions, string prompt, float temperature, string[] antiPrompts)
+        private async Task<string> InteractWithModelAsync(string promptInstructions, string prompt, int maxTokens, float temperature, string[] antiPrompts)
         {
             string response = "";
             if (session == null) return "Session still initializing, please wait.\n";
-            prompt = $"{promptInstructions} {prompt}";
-            await foreach (var text in session.ChatAsync(new ChatHistory.Message(AuthorRole.User, prompt), new InferenceParams { Temperature = temperature, AntiPrompts = antiPrompts }))
+            if (prompt == "" || prompt == null)
+            {
+                prompt = $"{promptInstructions}";
+            }
+            else
+            {
+                prompt = $"{promptInstructions} {prompt}";
+            }
+
+            await foreach (var text in session.ChatAsync(new ChatHistory.Message(AuthorRole.User, prompt), new InferenceParams { MaxTokens = maxTokens, Temperature = temperature, AntiPrompts = antiPrompts }))
             {
                 response += text;
             }
-            return response.Trim();
+            return response;
         }
 
         private Task<string> GetPromptWithoutDatabase(string userQuery)
@@ -147,7 +154,7 @@ namespace EdgeRag
 
     public class ConversationManagerConsole : ConversationManager
     {
-        public ConversationManagerConsole(IInputHandler inputHandler, ModelLoaderOutputs modelLoaderOutputs, DatabaseManager? databaseManager, float temperature, string[] antiPrompts, int numTopMatches) : base(inputHandler, modelLoaderOutputs, databaseManager, temperature, antiPrompts, numTopMatches)
+        public ConversationManagerConsole(IInputHandler inputHandler, ModelLoaderOutputs modelLoaderOutputs, DatabaseManager? databaseManager, int maxTokens, float temperature, string[] antiPrompts, int numTopMatches) : base(inputHandler, modelLoaderOutputs, databaseManager, maxTokens, temperature, antiPrompts, numTopMatches)
         {
             OnMessage += Console.Write;
         }

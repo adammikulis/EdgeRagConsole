@@ -35,10 +35,9 @@ namespace EdgeRag
         {
             vectorDatabase.Columns.Add(embeddingColumnName, typeof(float[])); // Change to float[]
             vectorDatabase.Columns.Add("incidentNumber", typeof(long));
-            vectorDatabase.Columns.Add("incidentTitle", typeof(string));
             vectorDatabase.Columns.Add("incidentDetails", typeof(string));
-            vectorDatabase.Columns.Add("supportResponse", typeof(string));
-            vectorDatabase.Columns.Add("userSolution", typeof(string));
+            vectorDatabase.Columns.Add("incidentResponse", typeof(string));
+            vectorDatabase.Columns.Add("incidentSolution", typeof(string));
 
             // Check if the database JSON file exists; if not, initialize a new DataTable
             if (File.Exists(jsonDbPath))
@@ -62,7 +61,7 @@ namespace EdgeRag
             {
                 var factEmbeddings = ((IEnumerable<double>)row[embeddingColumnName]).Select(x => (float)x).ToArray(); // Compensates for implicit JSON conversion
                 var score = VectorSearchUtility.CosineSimilarity(queryEmbeddings, factEmbeddings);
-                string textToEmbed = $"{row["incidentDetails"]} {row["userSolution"]}"; // Do not need full text, just incident/solution
+                string textToEmbed = $"{row["incidentDetails"]} {row["incidentResponse"]} {row["incidentSolution"]}";
                 scores.Add(new Tuple<double, string>(score, textToEmbed));
             }
 
@@ -102,7 +101,7 @@ namespace EdgeRag
             }
         }
 
-        public void SaveJsonToFile(string json, string filePath)
+        public void SaveJsonToFile(string json, string filePath, bool overwrite)
         {
             string directory = Path.GetDirectoryName(filePath);
             if (!Directory.Exists(directory))
@@ -110,8 +109,12 @@ namespace EdgeRag
                 Directory.CreateDirectory(directory);
             }
 
-            // Check if the file exists
-            if (File.Exists(filePath))
+            if (File.Exists(filePath) && overwrite)
+            {
+                // Overwrite the existing file with the new JSON data
+                File.WriteAllText(filePath, json);
+            }
+            else if (File.Exists(filePath))
             {
                 // Append the new JSON data to the existing file
                 using (StreamWriter file = File.AppendText(filePath))
@@ -125,6 +128,7 @@ namespace EdgeRag
                 File.WriteAllText(filePath, json);
             }
         }
+
 
 
         public string ReadJsonFromFile(string filePath)
