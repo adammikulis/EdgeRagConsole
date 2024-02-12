@@ -9,16 +9,19 @@ namespace EdgeRag
         static async Task Main(string[] args)
         {
             string modelDirectoryPath = @"C:/ai/models";
+            string databaseJsonPath = "C:/ai/data/synthetic/syntheticData.json";
+
+            bool useDatabase = true; // Turn on to use vector databases for response (automatically turns on if generating data)
+            bool useChat = true; // Turn on for chat functionality or off to just generate synthetic data
+            int numSyntheticDataToGenerate = 0; // Set to 0 for normal chat, forces database usage if above 0
+            int numTopMatches = 3; // This is when querying the database of facts
+
             uint contextSize = 4096;
-            bool useDatabase = false; // Assuming you want to use the database now
             int numGpuLayers = 33; // Adjust based on VRAM capability
             uint numCpuThreads = 8;
             float temperature = 0.5f; // Adjust as needed
-            int numSyntheticDataToGenerate = 0; // Set to 0 for normal chat, forces database usage if above 0
-            string databaseJsonPath = "C:/ai/data/synthetic/syntheticData.json"; // Path to your JSON database
-            string[] antiPrompts = new string[] { "<endtoken>" };
-            int numTopMatches = 3; // This is when querying the database of facts
-
+            string[] antiPrompts = { "<end>" };
+            
             IInputHandler inputHandler = new ConsoleInputHandler();
 
             // Initialize ModelLoader and load model
@@ -26,30 +29,37 @@ namespace EdgeRag
             ModelLoaderOutputs modelLoaderOutputs = await modelLoader.InitializeAsync(inputHandler);
 
             // Initialize DatabaseManager if useDatabase is true
-            ConversationManagerConsole conversationLoader = null;
+            ConversationManagerConsole conversationManager = null;
             DatabaseManager databaseManager = null;
 
-            if (useDatabase || numSyntheticDataToGenerate > 0)
+            if (numSyntheticDataToGenerate > 0) useDatabase = true;
+
+            if (useDatabase)
             {
                 databaseManager = new DatabaseManager(databaseJsonPath, modelLoaderOutputs.embedder, modelLoaderOutputs.modelType);
+                await databaseManager.InitializeDatabaseAsync();
                 // Initialize ConversationLoader with DatabaseManager if needed
-                conversationLoader = new ConversationManagerConsole(inputHandler, modelLoaderOutputs, databaseManager, temperature, antiPrompts, numTopMatches);
+                conversationManager = new ConversationManagerConsole(inputHandler, modelLoaderOutputs, databaseManager, temperature, antiPrompts, numTopMatches);
 
                 // Synthetic data generation or start chat based on numSyntheticDataToGenerate
                 if (numSyntheticDataToGenerate > 0)
                 {
-                    conversationLoader.syntheticDataGenerator.GenerateITDataPipeline(numSyntheticDataToGenerate, databaseJsonPath).Wait();
-                    await conversationLoader.StartChatAsync("", "");
+                    conversationManager.syntheticDataGenerator.GenerateITDataPipeline(numSyntheticDataToGenerate, databaseJsonPath).Wait();
+                    if (useChat)
+                    {
+                        await conversationManager.StartChatAsync("", "");
+                    }
+                        
                 }
-                else
+                else if (useChat)
                 {
-                    await conversationLoader.StartChatAsync("", "");
+                    await conversationManager.StartChatAsync("", "");
                 }
             }
-            else
+            else if (useChat)
             {
-                conversationLoader = new ConversationManagerConsole(inputHandler, modelLoaderOutputs, databaseManager, temperature, antiPrompts, numTopMatches);
-                await conversationLoader.StartChatAsync("", "");
+                conversationManager = new ConversationManagerConsole(inputHandler, modelLoaderOutputs, databaseManager, temperature, antiPrompts, numTopMatches);
+                await conversationManager.StartChatAsync("", "");
             }
         }
     }

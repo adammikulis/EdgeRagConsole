@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace EdgeRag
 {
-    public class ModelLoader
+    public class ModelManager
     {
         private string directoryPath;
         private uint contextSize;
@@ -20,11 +20,10 @@ namespace EdgeRag
         public LLamaWeights? model { get; private set; }
         public LLamaEmbedder? embedder { get; private set; }
         public LLamaContext? context { get; private set; }
-        public DataTable dt { get; private set; }
         public event Action<string> onMessage = delegate { };
 
 
-        public ModelLoader(string directoryPath, uint contextSize, int num_gpu_layers, uint numCpuThreads)
+        public ModelManager(string directoryPath, uint contextSize, int num_gpu_layers, uint numCpuThreads)
         {
             this.directoryPath = directoryPath;
             this.contextSize = contextSize;
@@ -77,20 +76,20 @@ namespace EdgeRag
             {
                 ContextSize = contextSize,
                 EmbeddingMode = true, // Needs to be true to retrieve embeddings
-                GpuLayerCount = numGpuLayers, // Assuming a default value or this can be passed as a parameter
-                Threads = numCpuThreads // Assuming a default value or this can be passed as a parameter
+                GpuLayerCount = numGpuLayers,
+                Threads = numCpuThreads
             };
 
             model = LLamaWeights.LoadFromFile(modelParams);
             embedder = new LLamaEmbedder(model, modelParams);
             context = model.CreateContext(modelParams);
-            onMessage?.Invoke($"Model: {fullModelName} from {SelectedModelPath} loaded");
+            onMessage?.Invoke($"\nModel: {fullModelName} from {SelectedModelPath} loaded\n");
 
-            return new ModelLoaderOutputs(model, modelType, embedder, modelParams, context, dt);
+            return new ModelLoaderOutputs(model, modelType, embedder, modelParams, context);
         }
     }
 
-    public class ModelLoaderConsole : ModelLoader
+    public class ModelLoaderConsole : ModelManager
     {
         public ModelLoaderConsole(string directoryPath, uint contextSize, int numGpuLayers, uint numCpuThreads) : base(directoryPath, contextSize, numGpuLayers, numCpuThreads)
         {
@@ -107,17 +106,15 @@ namespace EdgeRag
         public LLamaContext context { get; set; }
         public DataTable embeddingsTable { get; set; }
 
-        public ModelLoaderOutputs(LLamaWeights model, string modelType, LLamaEmbedder embedder, ModelParams modelParams, LLamaContext context, DataTable embeddingsTable)
+        public ModelLoaderOutputs(LLamaWeights model, string modelType, LLamaEmbedder embedder, ModelParams modelParams, LLamaContext context)
         {
             this.model = model;
             this.modelType = modelType;
             this.embedder = embedder;
             this.modelParams = modelParams;
             this.context = context;
-            this.embeddingsTable = embeddingsTable;
         }
     }
-
 }
 
 

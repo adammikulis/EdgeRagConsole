@@ -1,64 +1,46 @@
-﻿using System;
-using System.Collections.Generic;
+﻿
 using System.Data;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using LLama;
 using LLama.Common;
-using Newtonsoft.Json;
 
 namespace EdgeRag
 {
     public class SyntheticDataGenerator
     {
         private DatabaseManager databaseManager;
+        private DataTable vectorDatabase;
         private ChatSession session;
-        private IInputHandler inputHandler;
-        private float temperature;
-        private DataTable syntheticDataTable;
         public event Action<string> OnMessage = delegate { };
         private string[] antiPrompts;
         private string modelType;
+        string embeddingColumnName = string.Empty;
 
-        public SyntheticDataGenerator(DatabaseManager databaseManager, ChatSession session, IInputHandler inputHandler, float temperature, string[] antiPrompts)
+        public SyntheticDataGenerator(DatabaseManager databaseManager, ChatSession session, string[] antiPrompts)
         {
             this.databaseManager = databaseManager;
             this.session = session;
-            this.inputHandler = inputHandler;
-            this.temperature = temperature;
             this.antiPrompts = antiPrompts;
             modelType = databaseManager.ModelType;
-            InitializeITSyntheticDataTable();
+            vectorDatabase = databaseManager.GetVectorDatabase();
+            embeddingColumnName = $"{modelType}Embeddings";
         }
 
-        private void InitializeITSyntheticDataTable()
-        {
-            syntheticDataTable = new DataTable();
-            syntheticDataTable.Columns.Add("llamaEmbedding", typeof(float[]));
-            syntheticDataTable.Columns.Add("mistralEmbedding", typeof(float[]));
-            syntheticDataTable.Columns.Add("mixtralEmbedding", typeof(float[]));
-            syntheticDataTable.Columns.Add("phiEmbedding", typeof(float[]));
-            syntheticDataTable.Columns.Add("incidentNumber", typeof(int));
-            syntheticDataTable.Columns.Add("incidentTitle", typeof(string));
-            syntheticDataTable.Columns.Add("incidentDetails", typeof(string));
-            syntheticDataTable.Columns.Add("supportResponse", typeof(string));
-            syntheticDataTable.Columns.Add("userSolution", typeof(string));
-        }
 
         // This chains together LLM calls to build out a table of synthetic tech support data
-        public async Task<DataTable> GenerateITDataPipeline(int n, string databaseJsonPath)
+        public async Task GenerateITDataPipeline(int n, string databaseJsonPath)
         {
+            long currentIncidentNumber = 1;
+
             for (int i = 0; i < n; i++)
             {
-                OnMessage?.Invoke($"Generating item {i + 1}...\n");
+                OnMessage?.Invoke($"Generating item {currentIncidentNumber}...\n");
                 float userTemperature = 0.75f;
                 float supportTemperature = 0.25f;
                 string[] themes = { "an Apple device", "an Android device", "a Windows device", "a printer or copier", "a networking issue" };
                 Random rand = new Random();
                 string selectedTheme = themes[rand.Next(themes.Length)];
 
-                DataRow newRow = syntheticDataTable.NewRow();
+                DataRow newRow = vectorDatabase.NewRow();
                 newRow["incidentNumber"] = i + 1; // Increment for each incident
 
                 // Generates initial incident report title
@@ -86,29 +68,18 @@ namespace EdgeRag
                 string userFinalResponse = await InteractWithModelAsync(promptInstructions, supportResponse, userTemperature, antiPrompts);
                 userFinalResponse = CleanUpString(userFinalResponse);
                 newRow["userSolution"] = userFinalResponse.Replace(antiPrompts[0], "");
-                var embeddings = databaseManager.GenerateEmbeddings("Concatenate all of the columns here");
-                float[]? llamaEmbedding = null, mistralEmbedding = null, mixtralEmbedding = null, phiEmbedding = null;
-                switch (modelType)
-                {
-                    case "llama":
-                        llamaEmbedding = embeddings;
-                        break;
-                    case "mistral":
-                        mistralEmbedding = embeddings;
-                        break;
-                    case "mixtral":
-                        mixtralEmbedding = embeddings;
-                        break;
-                    case "phi":
-                        phiEmbedding = embeddings;
-                        break;
-                }
-            syntheticDataTable.Rows.Add(newRow);
-            }
-            string json = databaseManager.DataTableToJson(syntheticDataTable);
-            databaseManager.SaveJsonToFile(json, databaseJsonPath);
 
-            return syntheticDataTable;
+                string concatenatedText = $"{incidentDetails} {userFinalResponse}";
+
+                float[] embeddings = await databaseManager.GenerateEmbeddingsAsync(concatenatedText);
+
+                newRow[embeddingColumnName] = embeddings;
+
+                newRow["incidentNumber"] = currentIncidentNumber;
+                vectorDatabase.Rows.Add(newRow);
+            }
+            string json = databaseManager.DataTableToJson(vectorDatabase);
+            databaseManager.SaveJsonToFile(json, databaseJsonPath);
         }
 
         // Needed for cleaner tables/JSON files

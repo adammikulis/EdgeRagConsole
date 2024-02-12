@@ -1,7 +1,6 @@
 ﻿using LLama;
 using LLama.Common;
-using System.Data;
-using System.Threading.Tasks;
+
 
 namespace EdgeRag
 {
@@ -35,7 +34,6 @@ namespace EdgeRag
         private IInputHandler inputHandler;
         public event Action<string> OnMessage = delegate { };
 
-        // Adjust the constructor to accept DatabaseManager as nullable for flexibility
         public ConversationManager(IInputHandler inputHandler, ModelLoaderOutputs modelLoaderOutputs, DatabaseManager? databaseManager, float temperature, string[] antiPrompts, int numTopMatches)
         {
             this.inputHandler = inputHandler;
@@ -50,7 +48,7 @@ namespace EdgeRag
             this.databaseManager = databaseManager;
 
             systemMessages = new string[] {
-                $"Reply in a natural manner and utilize your existing knowledge. If you don't know the answer, use one of the relevant DB facts in the prompt. Be a friendly, concise, never offensive chatbot. Query: {query}\n"
+                $"You are a chatbot who needs to solve the user's query by giving many detailed steps"
             };
             prompt_number_chosen = 0;
             query = "";
@@ -58,7 +56,6 @@ namespace EdgeRag
             conversation = "";
             InitializeConversation();
         }
-
         protected void InitializeConversation()
         {
             if (model == null || modelParams == null)
@@ -72,7 +69,7 @@ namespace EdgeRag
             session = new ChatSession(executor);
             if (databaseManager != null)
             {
-                syntheticDataGenerator = new SyntheticDataGenerator(databaseManager, session, inputHandler, temperature, antiPrompts);
+                syntheticDataGenerator = new SyntheticDataGenerator(databaseManager, session, antiPrompts);
             }
         }
 
@@ -84,10 +81,11 @@ namespace EdgeRag
                 while (true)
                 {
                     string userQuery = await inputHandler.ReadLineAsync();
+                    userQuery = systemMessages[0] + userQuery;
 
-                    // Check for null before using databaseManager
                     if (databaseManager != null)
                     {
+                        userQuery += " use the following data to help solve the problem:";
                         prompt = await databaseManager.QueryDatabase(userQuery, numTopMatches);
                     }
                     else
@@ -101,8 +99,6 @@ namespace EdgeRag
                 }
             }
         }
-
-
         private async Task<string> InteractWithModelAsync(string promptInstructions, string prompt, float temperature, string[] antiPrompts)
         {
             string response = "";
@@ -117,8 +113,7 @@ namespace EdgeRag
 
         private Task<string> GetPromptWithoutDatabase(string userQuery)
         {
-            // Adjusted to take the user's query directly
-            string queriedPrompt = $"User: {userQuery}\nAnswer:";
+            string queriedPrompt = $"User: {userQuery}\nResponse:";
             return Task.FromResult(queriedPrompt);
         }
 

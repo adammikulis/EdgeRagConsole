@@ -1,6 +1,7 @@
 ﻿using System.Data;
-using LLama;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using LLama;
 
 namespace EdgeRag
 {
@@ -10,13 +11,14 @@ namespace EdgeRag
         private LLamaEmbedder embedder;
         private string modelType;
         private string jsonDbPath;
+        string embeddingColumnName;
 
         public DatabaseManager(string jsonDbPath, LLamaEmbedder embedder, string modelType)
         {
             this.jsonDbPath = jsonDbPath;
             this.embedder = embedder;
             this.modelType = modelType;
-            InitializeDataTable();
+            embeddingColumnName = $"{modelType}Embeddings";
         }
 
         public string ModelType
@@ -24,80 +26,114 @@ namespace EdgeRag
             get { return modelType; }
         }
 
-        private void InitializeDataTable()
+        public DataTable GetVectorDatabase()
         {
-            vectorDatabase = JsonToDataTable(ReadJsonFromFile(jsonDbPath));
-            // User's Json likely will not have embedding columns already
-            if (!vectorDatabase.Columns.Contains("llamaEmbedding")) vectorDatabase.Columns.Add("llamaEmbedding", typeof(float[]));
-            if (!vectorDatabase.Columns.Contains("mistralEmbedding")) vectorDatabase.Columns.Add("mistralEmbedding", typeof(float[]));
-            if (!vectorDatabase.Columns.Contains("mixtralEmbedding")) vectorDatabase.Columns.Add("mixtralEmbedding", typeof(float[]));
-            if (!vectorDatabase.Columns.Contains("phiEmbedding")) vectorDatabase.Columns.Add("phiEmbedding", typeof(float[]));
-
+            return vectorDatabase;
         }
 
-        public async Task<string> QueryDatabase(string query, int numTopMatches)
+        public async Task InitializeDatabaseAsync()
         {
-            // Asynchronously generating embeddings might be beneficial if the operation is CPU-bound and you're considering offloading it to a background thread.
-            // However, since LLamaEmbedder.GetEmbeddings is likely a CPU-bound synchronous method, using Task.Run for CPU-bound operations is a contentious choice and generally not recommended.
-            // For demonstration purposes and future-proofing for potentially async operations:
-            var queryEmbeddings = await Task.Run(() => GenerateEmbeddings(query));
+            vectorDatabase.Columns.Add(embeddingColumnName, typeof(float[])); // Change to float[]
+            vectorDatabase.Columns.Add("incidentNumber", typeof(long));
+            vectorDatabase.Columns.Add("incidentTitle", typeof(string));
+            vectorDatabase.Columns.Add("incidentDetails", typeof(string));
+            vectorDatabase.Columns.Add("supportResponse", typeof(string));
+            vectorDatabase.Columns.Add("userSolution", typeof(string));
 
-            var scores = new List<Tuple<double, string>>();
-            string embeddingColumnName = $"{modelType}Embedding";
-
-            foreach (DataRow row in vectorDatabase.Rows)
+            // Check if the database JSON file exists; if not, initialize a new DataTable
+            if (File.Exists(jsonDbPath))
             {
-                var factEmbeddings = (float[])row[embeddingColumnName];
-                var score = VectorSearchUtility.CosineSimilarity(queryEmbeddings, factEmbeddings);
-                scores.Add(new Tuple<double, string>(score, (string)row["originalText"]));
+                string existingJson = ReadJsonFromFile(jsonDbPath);
+                vectorDatabase = string.IsNullOrWhiteSpace(existingJson) ? new DataTable() : JsonToDataTable(existingJson);
             }
-
-            var topMatches = scores.OrderByDescending(s => s.Item1).Take(numTopMatches).ToList();
-            var queriedPrompt = query; // Start with the original query for appending DB facts
-
-            foreach (var match in topMatches)
-            {
-                queriedPrompt += $"DB Fact: {match.Item2}\n";
-            }
-
-            return queriedPrompt; // No need to use Task.FromResult since we're using await
         }
 
-        public float[] GenerateEmbeddings(string textToEmbed)
+        public async Task<float[]> GenerateEmbeddingsAsync(string textToEmbed)
         {
             return embedder.GetEmbeddings(textToEmbed);
         }
 
+        public async Task<string> QueryDatabase(string query, int numTopMatches)
+        {
+            var queryEmbeddings = await GenerateEmbeddingsAsync(query);
+            List<Tuple<double, string>> scores = new List<Tuple<double, string>>();
+
+            foreach (DataRow row in vectorDatabase.Rows)
+            {
+                var factEmbeddings = ((IEnumerable<double>)row[embeddingColumnName]).Select(x => (float)x).ToArray(); // Compensates for implicit JSON conversion
+                var score = VectorSearchUtility.CosineSimilarity(queryEmbeddings, factEmbeddings);
+                string textToEmbed = $"{row["incidentDetails"]} {row["userSolution"]}"; // Do not need full text, just incident/solution
+                scores.Add(new Tuple<double, string>(score, textToEmbed));
+            }
+
+            // Sort the scores to find the top matches
+            var topMatches = scores.OrderByDescending(s => s.Item1).Take(numTopMatches).ToList();
+            var queriedPrompt = query;
+
+            // Append the top matching texts to the queriedPrompt
+            foreach (var match in topMatches)
+            {
+                queriedPrompt += $"{match.Item2}\n";
+            }
+
+            return queriedPrompt;
+        }
+
+
         public string DataTableToJson(DataTable dataTable)
         {
-            string json = JsonConvert.SerializeObject(dataTable, Formatting.Indented);
-            return json;
+            return JsonConvert.SerializeObject(dataTable, Formatting.Indented);
         }
 
         public DataTable JsonToDataTable(string json)
         {
-            DataTable dataTable = JsonConvert.DeserializeObject<DataTable>(json);
-            return dataTable;
+            try
+            {
+                var settings = new JsonSerializerSettings
+                {
+                    Converters = { new SingleArrayConverter() }
+                };
+
+                return JsonConvert.DeserializeObject<DataTable>(json, settings);
+            }
+            catch
+            {
+                return new DataTable();
+            }
         }
 
         public void SaveJsonToFile(string json, string filePath)
         {
-            // Create directory if it doesn't exist
             string directory = Path.GetDirectoryName(filePath);
             if (!Directory.Exists(directory))
             {
                 Directory.CreateDirectory(directory);
             }
-
-            // Write the JSON string to the file
             File.WriteAllText(filePath, json);
         }
 
         public string ReadJsonFromFile(string filePath)
         {
-            // Read the JSON string from the file
-            string json = File.ReadAllText(filePath);
-            return json;
+            return File.Exists(filePath) ? File.ReadAllText(filePath) : string.Empty;
+        }
+
+        public class SingleArrayConverter : JsonConverter
+        {
+            public override bool CanConvert(Type objectType)
+            {
+                return (objectType == typeof(float[]));
+            }
+
+            public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+            {
+                JArray array = JArray.Load(reader);
+                return array.Select(jv => jv.Value<float>()).ToArray();
+            }
+
+            public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+            {
+                // Leave this method empty since we are only deserializing float arrays
+            }
         }
     }
 }
