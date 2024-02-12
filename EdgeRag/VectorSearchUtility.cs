@@ -8,7 +8,7 @@ namespace EdgeRag
 {
     public class VectorSearchUtility
     {
-        public static double CosineSimilarity(float[] vector1, float[] vector2)
+        public static double CosineSimilarity(double[] vector1, double[] vector2)
         {
             double dotProduct = 0.0, magnitude1 = 0.0, magnitude2 = 0.0;
             int length = Math.Min(vector1.Length, vector2.Length);

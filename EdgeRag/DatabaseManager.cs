@@ -12,7 +12,6 @@ namespace EdgeRag
         private string modelType;
         private string jsonDbPath;
         string embeddingColumnName;
-
         public DatabaseManager(string jsonDbPath, LLamaEmbedder embedder, string modelType)
         {
             this.jsonDbPath = jsonDbPath;
@@ -33,7 +32,7 @@ namespace EdgeRag
 
         public async Task InitializeDatabaseAsync()
         {
-            vectorDatabase.Columns.Add(embeddingColumnName, typeof(float[])); // Change to float[]
+            vectorDatabase.Columns.Add(embeddingColumnName, typeof(double[]));
             vectorDatabase.Columns.Add("incidentNumber", typeof(long));
             vectorDatabase.Columns.Add("incidentDetails", typeof(string));
             vectorDatabase.Columns.Add("incidentResponse", typeof(string));
@@ -47,10 +46,16 @@ namespace EdgeRag
             }
         }
 
-        public async Task<float[]> GenerateEmbeddingsAsync(string textToEmbed)
+        public async Task<double[]> GenerateEmbeddingsAsync(string textToEmbed)
         {
-            return embedder.GetEmbeddings(textToEmbed);
+            // Directly call the synchronous method without await
+            float[] embeddingsFloat = embedder.GetEmbeddings(textToEmbed);
+            // Convert each float to double
+            double[] embeddingsDouble = embeddingsFloat.Select(f => (double)f).ToArray();
+            return embeddingsDouble;
         }
+
+
 
         public async Task<string> QueryDatabase(string query, int numTopMatches)
         {
@@ -59,10 +64,10 @@ namespace EdgeRag
 
             foreach (DataRow row in vectorDatabase.Rows)
             {
-                var factEmbeddings = ((IEnumerable<double>)row[embeddingColumnName]).Select(x => (float)x).ToArray(); // Compensates for implicit JSON conversion
+                var factEmbeddings = (double[])row[embeddingColumnName];
                 var score = VectorSearchUtility.CosineSimilarity(queryEmbeddings, factEmbeddings);
-                string textToEmbed = $"{row["incidentDetails"]} {row["incidentResponse"]} {row["incidentSolution"]}";
-                scores.Add(new Tuple<double, string>(score, textToEmbed));
+                string originalText = $"{row["incidentDetails"]} {row["incidentResponse"]} {row["incidentSolution"]}";
+                scores.Add(new Tuple<double, string>(score, originalText));
             }
 
             // Sort the scores to find the top matches
@@ -86,13 +91,14 @@ namespace EdgeRag
 
         public DataTable JsonToDataTable(string json)
         {
+            var settings = new JsonSerializerSettings
+            {
+                // Add the FloatArrayConverter to the Converters list
+                Converters = { new FloatArrayConverter() }
+            };
+
             try
             {
-                var settings = new JsonSerializerSettings
-                {
-                    Converters = { new SingleArrayConverter() }
-                };
-
                 return JsonConvert.DeserializeObject<DataTable>(json, settings);
             }
             catch
@@ -129,14 +135,12 @@ namespace EdgeRag
             }
         }
 
-
-
         public string ReadJsonFromFile(string filePath)
         {
             return File.Exists(filePath) ? File.ReadAllText(filePath) : string.Empty;
         }
 
-        public class SingleArrayConverter : JsonConverter
+        public class FloatArrayConverter : JsonConverter
         {
             public override bool CanConvert(Type objectType)
             {
@@ -146,12 +150,17 @@ namespace EdgeRag
             public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
             {
                 JArray array = JArray.Load(reader);
-                return array.Select(jv => jv.Value<float>()).ToArray();
+                float[] floats = new float[array.Count];
+                for (int i = 0; i < array.Count; i++)
+                {
+                    floats[i] = (float)array[i].ToObject<double>();
+                }
+                return floats;
             }
 
             public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
             {
-                // Leave this method empty since we are only deserializing float arrays
+                serializer.Serialize(writer, value);
             }
         }
     }

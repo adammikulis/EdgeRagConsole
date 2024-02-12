@@ -2,7 +2,6 @@
 using System.Data;
 using LLama;
 using LLama.Common;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace EdgeRag
 {
@@ -58,24 +57,24 @@ namespace EdgeRag
                 //newRow["incidentTitle"] = CleanUpString(incidentTitle);
 
                 // Generate incident details based on the incident
-                prompt = $"Describe a tech issue in 2-3 sentences as the user about {selectedTheme}";
-                string incidentDetails = await InteractWithModelAsync(systemMessage, prompt, maxTokens / 2, userTemperature, antiPrompts);
+                prompt = $"Describe a tech issue as the User in 2-3 sentences about {selectedTheme}";
+                string incidentDetails = await InteractWithModelAsync(systemMessage, prompt, maxTokens, userTemperature, antiPrompts);
                 newRow["incidentDetails"] = CleanUpString(incidentDetails);
 
                 // Generate IT support's response
-                prompt = $"Give the user 3-10 troubleshooting steps for {newRow["incidentDetails"]}";
+                prompt = $"Summarize {newRow["incidentDetails"]} and give 3-10 troubleshooting steps";
                 string incidentResponse = await InteractWithModelAsync(systemMessage, prompt, maxTokens * 2, supportTemperature, antiPrompts);
                 newRow["incidentResponse"] = CleanUpString(incidentResponse);
 
                 // Generate user's final response based on IT support's help
-                prompt = $"Tell tech support how you solved {newRow["incidentDetails"]} with {newRow["incidentResponse"]}";
+                prompt = $"Summarize {newRow["incidentResponse"]} and solve the tech issue with that";
                 string userFinalResponse = await InteractWithModelAsync(systemMessage, prompt, maxTokens * 4, userTemperature, antiPrompts);
                 newRow["incidentSolution"] = CleanUpString(userFinalResponse);
 
                 string concatenatedText = $"{incidentDetails} {incidentResponse} {userFinalResponse}";
                 concatenatedText = CleanUpString(concatenatedText);
 
-                float[] embeddings = await databaseManager.GenerateEmbeddingsAsync(concatenatedText);
+                double[] embeddings = await databaseManager.GenerateEmbeddingsAsync(concatenatedText);
                 newRow[embeddingColumnName] = embeddings;
 
                 vectorDatabase.Rows.Add(newRow);
