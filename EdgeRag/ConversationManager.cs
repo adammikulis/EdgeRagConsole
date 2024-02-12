@@ -81,6 +81,14 @@ namespace EdgeRag
                 while (true)
                 {
                     string userQuery = await inputHandler.ReadLineAsync();
+
+                    // Check if the user input is empty or contains "exit"
+                    if (string.IsNullOrWhiteSpace(userQuery) || userQuery.ToLower() == "exit")
+                    {
+                        OnMessage?.Invoke("Exiting chat session.");
+                        break;
+                    }
+
                     userQuery = systemMessages[0] + userQuery;
 
                     if (databaseManager != null)
@@ -99,6 +107,7 @@ namespace EdgeRag
                 }
             }
         }
+
         private async Task<string> InteractWithModelAsync(string promptInstructions, string prompt, float temperature, string[] antiPrompts)
         {
             string response = "";

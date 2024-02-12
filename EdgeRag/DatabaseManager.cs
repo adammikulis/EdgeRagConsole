@@ -109,8 +109,23 @@ namespace EdgeRag
             {
                 Directory.CreateDirectory(directory);
             }
-            File.WriteAllText(filePath, json);
+
+            // Check if the file exists
+            if (File.Exists(filePath))
+            {
+                // Append the new JSON data to the existing file
+                using (StreamWriter file = File.AppendText(filePath))
+                {
+                    file.WriteLine(json);
+                }
+            }
+            else
+            {
+                // Create a new file and write the JSON data
+                File.WriteAllText(filePath, json);
+            }
         }
+
 
         public string ReadJsonFromFile(string filePath)
         {

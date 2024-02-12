@@ -69,7 +69,7 @@ namespace EdgeRag
                 userFinalResponse = CleanUpString(userFinalResponse);
                 newRow["userSolution"] = userFinalResponse.Replace(antiPrompts[0], "");
 
-                string concatenatedText = $"{incidentDetails} {userFinalResponse}";
+                string concatenatedText = $"{incidentTitle} {incidentDetails} {supportResponse} {userFinalResponse}";
 
                 float[] embeddings = await databaseManager.GenerateEmbeddingsAsync(concatenatedText);
 

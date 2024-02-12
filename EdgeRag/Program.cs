@@ -12,8 +12,8 @@ namespace EdgeRag
             string databaseJsonPath = "C:/ai/data/synthetic/syntheticData.json";
 
             bool useDatabase = true; // Turn on to use vector databases for response (automatically turns on if generating data)
-            bool useChat = true; // Turn on for chat functionality or off to just generate synthetic data
-            int numSyntheticDataToGenerate = 0; // Set to 0 for normal chat, forces database usage if above 0
+            bool useChat = false; // Turn on for chat functionality or off to just generate synthetic data
+            int numSyntheticDataToGenerate = 1; // Set to 0 for normal chat, forces database usage if above 0
             int numTopMatches = 3; // This is when querying the database of facts
 
             uint contextSize = 4096;
