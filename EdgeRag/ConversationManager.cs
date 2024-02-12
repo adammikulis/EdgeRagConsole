@@ -6,7 +6,7 @@ namespace EdgeRag
 {
     public class ConversationManager
     {
-        protected bool useDatabase;
+        protected bool useDatabaseForChat;
         protected string? directoryPath;
         protected string? selectedModelPath;
         protected string? fullModelName;
@@ -34,7 +34,7 @@ namespace EdgeRag
         private IInputHandler inputHandler;
         public event Action<string> OnMessage = delegate { };
 
-        public ConversationManager(IInputHandler inputHandler, ModelLoaderOutputs modelLoaderOutputs, DatabaseManager? databaseManager, int maxTokens, float temperature, string[] antiPrompts, int numTopMatches)
+        public ConversationManager(IInputHandler inputHandler, ModelLoaderOutputs modelLoaderOutputs, DatabaseManager? databaseManager, bool useDatabaseForChat, int maxTokens, float temperature, string[] antiPrompts, int numTopMatches)
         {
             this.inputHandler = inputHandler;
             this.model = modelLoaderOutputs.model;
@@ -47,6 +47,7 @@ namespace EdgeRag
             this.antiPrompts = antiPrompts;
             this.numTopMatches = numTopMatches;
             this.databaseManager = databaseManager;
+            this.useDatabaseForChat = useDatabaseForChat;
 
             prompt_number_chosen = 0;
             query = "";
@@ -54,6 +55,12 @@ namespace EdgeRag
             conversation = "";
             InitializeConversation();
         }
+
+        public ChatSession? GetSession()
+        {
+            return this.session;
+        }
+
         protected void InitializeConversation()
         {
             if (model == null || modelParams == null)
@@ -85,7 +92,7 @@ namespace EdgeRag
 
                     userQuery = systemMessages[0] + userQuery;
 
-                    if (databaseManager != null)
+                    if (useDatabaseForChat)
                     {
                         userQuery += " use the following data to help solve the problem:";
                         prompt = await databaseManager.QueryDatabase(userQuery, numTopMatches);
@@ -160,7 +167,7 @@ namespace EdgeRag
 
     public class ConversationManagerConsole : ConversationManager
     {
-        public ConversationManagerConsole(IInputHandler inputHandler, ModelLoaderOutputs modelLoaderOutputs, DatabaseManager? databaseManager, int maxTokens, float temperature, string[] antiPrompts, int numTopMatches) : base(inputHandler, modelLoaderOutputs, databaseManager, maxTokens, temperature, antiPrompts, numTopMatches)
+        public ConversationManagerConsole(IInputHandler inputHandler, ModelLoaderOutputs modelLoaderOutputs, DatabaseManager? databaseManager, bool useDatabaseForChat, int maxTokens, float temperature, string[] antiPrompts, int numTopMatches) : base(inputHandler, modelLoaderOutputs, databaseManager, useDatabaseForChat, maxTokens, temperature, antiPrompts, numTopMatches)
         {
             OnMessage += Console.Write;
         }

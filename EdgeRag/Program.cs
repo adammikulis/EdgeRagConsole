@@ -12,8 +12,8 @@ namespace EdgeRag
             string modelDirectoryPath = @"C:/ai/models";
             string databaseJsonPath = "C:/ai/data/synthetic/syntheticData.json";
 
-            bool useDatabase = true; // Turn on to use vector databases for response (automatically turns on if generating data)
             bool useChat = false; // Turn on for chat functionality or off to just generate synthetic data
+            bool useDatabaseForChat = true; // Turn on to use vector databases for response (automatically turns on if generating data)
             int numSyntheticDataToGenerate = 3; // Set to 0 for normal chat, forces database usage if above 0
             int numTopMatches = 3; // This is when querying the database of facts
 
@@ -35,38 +35,22 @@ namespace EdgeRag
             ModelLoaderOutputs modelLoaderOutputs = await modelLoader.InitializeAsync(inputHandler);
 
             // Initialize DatabaseManager if useDatabase is true
-            ConversationManagerConsole conversationManager = null;
-            DatabaseManager databaseManager = null;
-            SyntheticDataGenerator syntheticDataGenerator = null;
+            DatabaseManager databaseManager = new DatabaseManager(databaseJsonPath, modelLoaderOutputs.embedder, modelLoaderOutputs.modelType);
+            await databaseManager.InitializeDatabaseAsync();
+            ConversationManager conversationManager = new ConversationManagerConsole(inputHandler, modelLoaderOutputs, databaseManager, useDatabaseForChat, maxTokens, temperature, antiPrompts, numTopMatches);
+            SyntheticDataGenerator syntheticDataGenerator = new SyntheticDataGenerator(databaseManager, conversationManager, maxTokens, antiPrompts);
 
-            if (numSyntheticDataToGenerate > 0) useDatabase = true;
 
-            if (useDatabase)
+            if (numSyntheticDataToGenerate > 0)
             {
-                databaseManager = new DatabaseManager(databaseJsonPath, modelLoaderOutputs.embedder, modelLoaderOutputs.modelType);
-                await databaseManager.InitializeDatabaseAsync();
-                // Initialize ConversationLoader with DatabaseManager if needed
-                conversationManager = new ConversationManagerConsole(inputHandler, modelLoaderOutputs, databaseManager, maxTokens, temperature, antiPrompts, numTopMatches);
-                syntheticDataGenerator = new SyntheticDataGenerator(databaseManager, conversationManager, maxTokens, antiPrompts);
-
-
-                // Synthetic data generation or start chat based on numSyntheticDataToGenerate
-                if (numSyntheticDataToGenerate > 0)
-                {
-                    syntheticDataGenerator.GenerateITDataPipeline(numSyntheticDataToGenerate, databaseJsonPath).Wait();
-                    if (useChat)
-                    {
-                        await conversationManager.StartChatAsync(systemMessage[0], "");
-                    }
-                }
-                else if (useChat)
+                syntheticDataGenerator.GenerateITDataPipeline(numSyntheticDataToGenerate, databaseJsonPath).Wait();
+                if (useChat)
                 {
                     await conversationManager.StartChatAsync(systemMessage[0], "");
                 }
             }
             else if (useChat)
             {
-                conversationManager = new ConversationManagerConsole(inputHandler, modelLoaderOutputs, databaseManager, maxTokens, temperature, antiPrompts, numTopMatches);
                 await conversationManager.StartChatAsync(systemMessage[0], "");
             }
         }

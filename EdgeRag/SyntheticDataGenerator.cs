@@ -24,7 +24,8 @@ namespace EdgeRag
         public SyntheticDataGenerator(DatabaseManager databaseManager, ConversationManager conversationManager, int maxTokens, string[] antiPrompts)
         {
             this.databaseManager = databaseManager;
-            this.chatSession = chatSession;
+            this.conversationManager = conversationManager;
+            chatSession = conversationManager.GetSession();
             this.maxTokens = maxTokens;
             this.antiPrompts = antiPrompts;
             systemMessage = "";
@@ -68,7 +69,7 @@ namespace EdgeRag
                 newRow["incidentNumber"] = currentIncidentNumber; // Set the current incident number
 
                 // Generate incident details
-                string prompt = $"Describe a tech issue as the User in 2-3 sentences about {selectedTheme}";
+                prompt = $"Describe a tech issue as the User in 2-3 sentences about {selectedTheme}";
                 string incidentDetails = await InteractWithModelAsync(systemMessage, prompt, maxTokens, userTemperature, antiPrompts);
                 newRow["incidentDetails"] = conversationManager.CleanUpString(incidentDetails);
 
