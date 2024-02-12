@@ -1,1 +1,2 @@
 # EdgeRag
+This is a C# project that uses only LLamaSharp to build a retrieval-augmented generative A.I. pipeline. You can get a local large language models (LLM) by downloading a compatible .gguf file from HuggingFace, putting it in the folder C:/ai/models or change the programmed path to your own. Start this by either running the .exe in the bin/release/net8.0 folder or run it through Visual Studio/VS Code.
