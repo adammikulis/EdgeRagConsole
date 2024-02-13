@@ -11,15 +11,15 @@ namespace EdgeRag
     {
         private string directoryPath;
         private uint contextSize;
-        protected int numGpuLayers;
-        protected uint numCpuThreads;
-        protected uint seed;
+        private int numGpuLayers;
+        private uint numCpuThreads;
+        private uint seed;
         public string SelectedModelPath { get; private set; }
-        public string? fullModelName { get; private set; }
+        public string? modelName;
         public string? modelType { get; private set; }
         public ModelParams? modelParams { get; private set; }
         public LLamaWeights? model { get; private set; }
-        public LLamaEmbedder? embedder { get; private set; }
+        public LLamaEmbedder? embedder;
         public LLamaContext? context { get; private set; }
         public event Action<string> onMessage = delegate { };
 
@@ -34,7 +34,17 @@ namespace EdgeRag
             SelectedModelPath = "";
         }
 
-        public async Task<ModelLoaderOutputs> InitializeAsync(IInputHandler inputHandler)
+        public string GetModelName()
+        {
+            return this.modelName;
+        }
+
+        public LLamaEmbedder GetModelEmbedder()
+        {
+            return this.embedder;
+        }
+
+        public async Task<ModelManagerOutputs> InitializeAsync(IInputHandler inputHandler)
         {
             if (!Directory.Exists(directoryPath))
             {
@@ -62,11 +72,11 @@ namespace EdgeRag
                 {
                     index -= 1;
                     SelectedModelPath = filePaths[index];
-                    fullModelName = Path.GetFileNameWithoutExtension(SelectedModelPath);
-                    onMessage?.Invoke($"Model selected: {fullModelName}");
+                    modelName = Path.GetFileNameWithoutExtension(SelectedModelPath);
+                    onMessage?.Invoke($"Model selected: {modelName}");
                     validModelSelected = true;
 
-                    modelType = fullModelName.Split('-')[0].ToLower();
+                    modelType = modelName.Split('-')[0].ToLower();
                 }
                 else
                 {
@@ -86,33 +96,33 @@ namespace EdgeRag
             model = LLamaWeights.LoadFromFile(modelParams);
             embedder = new LLamaEmbedder(model, modelParams);
             context = model.CreateContext(modelParams);
-            onMessage?.Invoke($"\nModel: {fullModelName} from {SelectedModelPath} loaded\n");
+            onMessage?.Invoke($"\nModel: {modelName} from {SelectedModelPath} loaded\n");
 
-            return new ModelLoaderOutputs(model, modelType, embedder, modelParams, context);
+            return new ModelManagerOutputs(model, modelType, embedder, modelParams, context);
         }
     }
 
-    public class ModelLoaderConsole : ModelManager
+    public class ModelManagerConsole : ModelManager
     {
-        public ModelLoaderConsole(string directoryPath, uint seed, uint contextSize, int numGpuLayers, uint numCpuThreads) : base(directoryPath, seed, contextSize, numGpuLayers, numCpuThreads)
+        public ModelManagerConsole(string directoryPath, uint seed, uint contextSize, int numGpuLayers, uint numCpuThreads) : base(directoryPath, seed, contextSize, numGpuLayers, numCpuThreads)
         {
             onMessage += Console.WriteLine;
         }
     }
 
-    public class ModelLoaderOutputs
+    public class ModelManagerOutputs
     {
         public LLamaWeights model { get; set; }
         public LLamaEmbedder embedder { get; set; }
         public ModelParams modelParams { get; set; }
-        public string modelType { get; set; }
+        public string modelName { get; set; }
         public LLamaContext context { get; set; }
         public DataTable embeddingsTable { get; set; }
 
-        public ModelLoaderOutputs(LLamaWeights model, string modelType, LLamaEmbedder embedder, ModelParams modelParams, LLamaContext context)
+        public ModelManagerOutputs(LLamaWeights model, string modelName, LLamaEmbedder embedder, ModelParams modelParams, LLamaContext context)
         {
             this.model = model;
-            this.modelType = modelType;
+            this.modelName = modelName;
             this.embedder = embedder;
             this.modelParams = modelParams;
             this.context = context;

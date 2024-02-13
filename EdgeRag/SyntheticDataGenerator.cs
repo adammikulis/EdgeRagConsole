@@ -1,124 +1,120 @@
-﻿
-using System.Data;
+﻿using System.Data;
 using LLama;
-using LLama.Common;
 using Newtonsoft.Json;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace EdgeRag
 {
     public class SyntheticDataGenerator
     {
+        private ModelManager modelManager;
         private DatabaseManager databaseManager;
         private ConversationManager conversationManager;
         private DataTable vectorDatabase;
-        private ChatSession chatSession;
-        DataRow newRow;
         private int maxTokens;
-        private string prompt;
-        private string systemMessage;
-        public event Action<string> OnMessage = delegate { };
-        private string[] antiPrompts;
-        private string modelType;
-        string embeddingColumnName = string.Empty;
+        private string modelName;
+        private string embeddingColumnName;
 
-        public SyntheticDataGenerator(DatabaseManager databaseManager, ConversationManager conversationManager, int maxTokens, string[] antiPrompts)
+
+        public SyntheticDataGenerator(ModelManager modelManager, DatabaseManager databaseManager, ConversationManager conversationManager)
         {
+            this.modelManager = modelManager;
             this.databaseManager = databaseManager;
             this.conversationManager = conversationManager;
-            chatSession = conversationManager.GetSession();
-            this.maxTokens = maxTokens;
-            this.antiPrompts = antiPrompts;
-            systemMessage = "";
-
-            modelType = databaseManager.ModelType;
-            vectorDatabase = databaseManager.GetVectorDatabase();
-            embeddingColumnName = $"{modelType}Embeddings";
+            this.maxTokens = conversationManager.GetMaxTokens();
+            this.vectorDatabase = databaseManager.GetVectorDatabase();
+            modelName = modelManager.GetModelName();
+            embeddingColumnName = $"{modelName}Embeddings";
         }
 
-        // This chains together LLM calls to build out a table of synthetic tech support data
         public async Task GenerateITDataPipeline(int n, string databaseJsonPath)
         {
-            // Determine the starting incident number
-            long currentIncidentNumber = 0;
-            if (File.Exists(databaseJsonPath))
+            long currentIncidentNumber = DetermineStartingIncidentNumber(databaseJsonPath);
+
+            for (int i = 0; i < n; i++)
             {
-                string existingJson = File.ReadAllText(databaseJsonPath);
+                currentIncidentNumber++;
+                OnMessage?.Invoke($"Generating item {currentIncidentNumber}...\n");
+                string selectedTheme = SelectRandomTheme();
+
+                DataRow newRow = vectorDatabase.NewRow();
+                newRow["incidentNumber"] = currentIncidentNumber;
+
+                // Sequentially generate and set the content, passing previous content as context
+                string incidentDetails = await GenerateContentAsync(selectedTheme, "", "details");
+                string incidentResponse = await GenerateContentAsync(selectedTheme, incidentDetails, "response");
+                string incidentSolution = await GenerateContentAsync(selectedTheme, incidentDetails + " " + incidentResponse, "solution");
+
+                // Assign generated content to the newRow
+                newRow["incidentDetails"] = incidentDetails;
+                newRow["incidentResponse"] = incidentResponse;
+                newRow["incidentSolution"] = incidentSolution;
+
+                // Generate embeddings for the incidentSolution
+                double[] embeddings = await databaseManager.GenerateEmbeddingsAsync(incidentSolution);
+                newRow[embeddingColumnName] = embeddings;
+
+                vectorDatabase.Rows.Add(newRow);
+            }
+
+            // Serialize DataTable to JSON and save
+            string json = JsonConvert.SerializeObject(vectorDatabase, Formatting.Indented);
+            System.IO.File.WriteAllText(databaseJsonPath, json);
+        }
+
+        private long DetermineStartingIncidentNumber(string databaseJsonPath)
+        {
+            if (System.IO.File.Exists(databaseJsonPath))
+            {
+                string existingJson = System.IO.File.ReadAllText(databaseJsonPath);
                 if (!string.IsNullOrWhiteSpace(existingJson))
                 {
                     DataTable existingTable = JsonConvert.DeserializeObject<DataTable>(existingJson);
                     if (existingTable != null && existingTable.Rows.Count > 0)
                     {
-                        currentIncidentNumber = existingTable.AsEnumerable()
-                                      .Max(row => Convert.ToInt64(row["incidentNumber"]));
+                        return existingTable.AsEnumerable().Max(row => Convert.ToInt64(row["incidentNumber"]));
                     }
                 }
             }
-
-            for (int i = 0; i < n; i++)
-            {
-                currentIncidentNumber++; // Increment the incident number for each new entry
-                OnMessage?.Invoke($"Generating item {currentIncidentNumber}...\n");
-
-                float userTemperature = 0.75f;
-                float supportTemperature = 0.25f;
-                string[] themes = { "an Apple device", "an Android device", "a Windows device", "a printer or copier", "networking" };
-                Random rand = new Random();
-                string selectedTheme = themes[rand.Next(themes.Length)];
-
-                newRow = vectorDatabase.NewRow();
-                newRow["incidentNumber"] = currentIncidentNumber; // Set the current incident number
-
-                // Generate incident details
-                prompt = $"Describe a tech issue as the User in 2-3 sentences about {selectedTheme}";
-                string incidentDetails = await InteractWithModelAsync(systemMessage, prompt, maxTokens, userTemperature, antiPrompts);
-                newRow["incidentDetails"] = conversationManager.CleanUpString(incidentDetails);
-
-                // Generate IT support's response
-                prompt = $"Summarize {newRow["incidentDetails"]} and give 3-10 troubleshooting steps";
-                string incidentResponse = await InteractWithModelAsync(systemMessage, prompt, maxTokens * 2, supportTemperature, antiPrompts);
-                newRow["incidentResponse"] = conversationManager.CleanUpString(incidentResponse);
-
-                // Generate user's final response
-                prompt = $"As the user summarize and describe how you solved {newRow["incidentDetails"]} with steps {newRow["incidentResponse"]}";
-                string userFinalResponse = await InteractWithModelAsync(systemMessage, prompt, maxTokens * 4, userTemperature, antiPrompts);
-                newRow["incidentSolution"] = conversationManager.CleanUpString(userFinalResponse);
-
-                // Concatenate texts and generate embeddings
-                string concatenatedText = $"{incidentDetails} {incidentResponse} {userFinalResponse}";
-                double[] embeddings = await databaseManager.GenerateEmbeddingsAsync(conversationManager.CleanUpString(concatenatedText));
-                newRow[embeddingColumnName] = embeddings;
-
-                // Add to DataTable and write to JSON
-                vectorDatabase.Rows.Add(newRow);
-            }
-
-            string json = databaseManager.DataTableToJson(vectorDatabase);
-            databaseManager.SaveJsonToFile(json, databaseJsonPath);
+            return 0;
         }
 
-
-        private async Task<string> InteractWithModelAsync(string systemMessage, string prompt, int maxTokens, float temperature, string[] antiPrompts)
+        private string SelectRandomTheme()
         {
-            string response = "";
-            if (chatSession == null) return "chatSession still initializing, please wait.\n";
-            if (prompt == "" || prompt == null)
+            string[] themes = { "an Apple device", "an Android device", "a Windows device", "a printer or copier", "networking" };
+            Random rand = new Random();
+            return themes[rand.Next(themes.Length)];
+        }
+
+        private async Task<string> GenerateContentAsync(string theme, string previousContent, string contentType)
+        {
+            string prompt = "";
+            int tokenAllocationFactor = 16; // Default allocation factor
+
+            switch (contentType)
             {
-                prompt = $"{systemMessage}";
-            }
-            else if (this.systemMessage == "" || this.systemMessage == null)
-            {
-                prompt = $"{prompt}";
-            }
-            else
-            {
-                prompt = $"{systemMessage} {prompt}";
+                case "details":
+                    prompt = $"Describe a tech issue as the User in 2-3 sentences about {theme}.";
+                    tokenAllocationFactor = 16;
+                    break;
+                case "response":
+                    prompt = $"{previousContent} Summarize the issue and give 3-10 troubleshooting steps.";
+                    tokenAllocationFactor = 8;
+                    break;
+                case "solution":
+                    prompt = $"{previousContent} As the user, summarize and describe how you solved the issue with the provided steps.";
+                    tokenAllocationFactor = 4;
+                    break;
             }
 
-            await foreach (var text in chatSession.ChatAsync(new ChatHistory.Message(AuthorRole.User, prompt), new InferenceParams { MaxTokens = maxTokens, Temperature = temperature, AntiPrompts = antiPrompts }))
-            {
-                response += text;
-            }
-            return response;
+            int allocatedTokens = Math.Min(maxTokens, maxTokens / tokenAllocationFactor);
+            return await conversationManager.InteractWithModelAsync(prompt, allocatedTokens);
         }
+
+
+        // Event handler for messages
+        public event Action<string> OnMessage = delegate { };
     }
 }

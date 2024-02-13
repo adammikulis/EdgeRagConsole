@@ -6,53 +6,43 @@ namespace EdgeRag
 {
     public class ConversationManager
     {
-        protected bool useDatabaseForChat;
-        protected string? directoryPath;
-        protected string? selectedModelPath;
-        protected string? fullModelName;
-        protected string? modelType;
-        protected string[]? facts;
-        protected uint? contextSize;
-        protected string[] systemMessages;
+        private bool useDatabaseForChat;
+        private string[] systemMessages;
         private string[] antiPrompts;
-        private float temperature;
-        protected int prompt_number_chosen;
-        protected string conversation;
-        protected string query;
-        protected string prompt;
-        protected int numTopMatches;
-        protected int maxTokens;
 
-        protected LLamaWeights? model;
-        protected ModelParams? modelParams;
-        protected LLamaEmbedder? embedder;
-        protected LLamaContext? context;
-        protected InteractiveExecutor? executor;
-        protected ChatSession? session;
+        private float temperature;
+        private string prompt;
+        private int numTopMatches;
+        private int maxTokens;
+        private int systemMessage;
+
+        private LLamaWeights? model;
+        private ModelParams? modelParams;
+        private LLamaEmbedder? embedder;
+        private LLamaContext? context;
+        private InteractiveExecutor? executor;
+        private ChatSession? session;
         public DatabaseManager? databaseManager; 
 
         private IInputHandler inputHandler;
         public event Action<string> OnMessage = delegate { };
 
-        public ConversationManager(IInputHandler inputHandler, ModelLoaderOutputs modelLoaderOutputs, DatabaseManager? databaseManager, bool useDatabaseForChat, int maxTokens, float temperature, string[] antiPrompts, int numTopMatches)
+        public ConversationManager(IInputHandler inputHandler, ModelManagerOutputs modelLoaderOutputs, DatabaseManager? databaseManager, bool useDatabaseForChat, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts, int numTopMatches)
         {
             this.inputHandler = inputHandler;
             this.model = modelLoaderOutputs.model;
-            this.modelType = modelLoaderOutputs.modelType;
             this.modelParams = modelLoaderOutputs.modelParams;
             this.embedder = modelLoaderOutputs.embedder;
             this.context = modelLoaderOutputs.context;
             this.maxTokens = maxTokens;
             this.temperature = temperature;
             this.antiPrompts = antiPrompts;
+            this.systemMessages = systemMessages;
             this.numTopMatches = numTopMatches;
             this.databaseManager = databaseManager;
             this.useDatabaseForChat = useDatabaseForChat;
-
-            prompt_number_chosen = 0;
-            query = "";
+            systemMessage = 0;
             prompt = "";
-            conversation = "";
             InitializeConversation();
         }
 
@@ -61,7 +51,27 @@ namespace EdgeRag
             return this.session;
         }
 
-        protected void InitializeConversation()
+        public int GetMaxTokens()
+        {
+            return this.maxTokens;
+        }
+
+        public float GetTemperature()
+        {
+            return this.temperature;
+        }
+
+        public string[] GetAntiPrompts()
+        {
+            return this.antiPrompts;
+        }
+
+        public string[] GetSystemMessages()
+        {
+            return this.systemMessages;
+        }
+
+        private void InitializeConversation()
         {
             if (model == null || modelParams == null)
             {
@@ -74,37 +84,42 @@ namespace EdgeRag
             session = new ChatSession(executor);
         }
 
-        public async Task StartChatAsync(string systemMessage, string prompt)
+        public async Task StartChatAsync()
         {
             if (session != null)
             {
                 OnMessage?.Invoke("Chat session started, please input query:\n");
                 while (true)
                 {
-                    string userQuery = await inputHandler.ReadLineAsync();
+                    string prompt = await inputHandler.ReadLineAsync();
 
                     // Check if the user input is empty or contains "exit"
-                    if (string.IsNullOrWhiteSpace(userQuery) || userQuery.ToLower() == "exit")
+                    if (string.IsNullOrWhiteSpace(prompt) || prompt.ToLower() == "exit")
                     {
                         OnMessage?.Invoke("Exiting chat session.");
                         break;
                     }
 
-                    userQuery = systemMessages[0] + userQuery;
-
                     if (useDatabaseForChat)
                     {
-                        userQuery += " use the following data to help solve the problem:";
-                        prompt = await databaseManager.QueryDatabase(userQuery, numTopMatches);
+                        // Query the database and get results
+                        var queryResults = await databaseManager.QueryDatabase(prompt, numTopMatches);
+                        string summarizedTextResponse = await InteractWithModelAsync($"Summarize the troubleshooting steps: {queryResults.summarizedText}", maxTokens);
+
+                        // Join the incident numbers and scores arrays into strings for display
+                        string incidentNumbersStr = string.Join(", ", queryResults.incidentNumbers);
+                        string scoresStr = string.Join(", ", queryResults.scores.Select(score => score.ToString("F2"))); // Formatting scores to 2 decimal places
+
+                        // Display the results
+                        OnMessage?.Invoke($"\nIncident numbers: [{incidentNumbersStr}]\t Scores: [{scoresStr}]\n");
+                        OnMessage?.Invoke(summarizedTextResponse + "\n"); // Display the model's response correctly after awaiting its result
                     }
                     else
                     {
-                        prompt = await GetPromptWithoutDatabase(userQuery);
+                        // If not using the database for chat, directly interact with the model using the user input
+                        string response = await InteractWithModelAsync(prompt, maxTokens);
+                        OnMessage?.Invoke(response + "\n");
                     }
-
-                    string response = await InteractWithModelAsync(systemMessage, prompt, maxTokens, temperature, antiPrompts);
-                    OnMessage?.Invoke(response);
-                    conversation += prompt + " " + response;
                 }
             }
         }
@@ -125,31 +140,21 @@ namespace EdgeRag
             return cleanedString;
         }
 
-        private async Task<string> InteractWithModelAsync(string promptInstructions, string prompt, int maxTokens, float temperature, string[] antiPrompts)
+        public async Task<string> InteractWithModelAsync(string prompt, int maxTokens)
         {
-            string response = "";
             if (session == null) return "Session still initializing, please wait.\n";
-            if (prompt == "" || prompt == null)
-            {
-                prompt = $"{promptInstructions}";
-            }
-            else
-            {
-                prompt = $"{promptInstructions} {prompt}";
-            }
+            string response = "";
 
-            await foreach (var text in session.ChatAsync(new ChatHistory.Message(AuthorRole.User, prompt), new InferenceParams { MaxTokens = maxTokens, Temperature = temperature, AntiPrompts = antiPrompts }))
+            // Assuming systemMessages[systemMessage] is a prefix you want to add to every prompt
+            string fullPrompt = $"{systemMessages[systemMessage]} {prompt}".Trim();
+
+            await foreach (var text in session.ChatAsync(new ChatHistory.Message(AuthorRole.User, fullPrompt), new InferenceParams { MaxTokens = maxTokens, Temperature = temperature, AntiPrompts = antiPrompts }))
             {
                 response += text;
             }
             return response;
         }
 
-        private Task<string> GetPromptWithoutDatabase(string userQuery)
-        {
-            string queriedPrompt = $"User: {userQuery}\nResponse:";
-            return Task.FromResult(queriedPrompt);
-        }
     }
 
     public interface IInputHandler
@@ -167,7 +172,7 @@ namespace EdgeRag
 
     public class ConversationManagerConsole : ConversationManager
     {
-        public ConversationManagerConsole(IInputHandler inputHandler, ModelLoaderOutputs modelLoaderOutputs, DatabaseManager? databaseManager, bool useDatabaseForChat, int maxTokens, float temperature, string[] antiPrompts, int numTopMatches) : base(inputHandler, modelLoaderOutputs, databaseManager, useDatabaseForChat, maxTokens, temperature, antiPrompts, numTopMatches)
+        public ConversationManagerConsole(IInputHandler inputHandler, ModelManagerOutputs modelLoaderOutputs, DatabaseManager? databaseManager, bool useDatabaseForChat, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts, int numTopMatches) : base(inputHandler, modelLoaderOutputs, databaseManager, useDatabaseForChat, maxTokens, temperature, systemMessages, antiPrompts, numTopMatches)
         {
             OnMessage += Console.Write;
         }

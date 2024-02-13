@@ -8,21 +8,25 @@ namespace EdgeRag
     public class DatabaseManager
     {
         private DataTable vectorDatabase = new DataTable();
+        private ModelManager ModelManager;
         private LLamaEmbedder embedder;
-        private string modelType;
+        private string modelName;
         private string jsonDbPath;
         string embeddingColumnName;
-        public DatabaseManager(string jsonDbPath, LLamaEmbedder embedder, string modelType)
+        string summarizedText;
+        public DatabaseManager(string jsonDbPath, ModelManager modelManager)
         {
             this.jsonDbPath = jsonDbPath;
-            this.embedder = embedder;
-            this.modelType = modelType;
-            embeddingColumnName = $"{modelType}Embeddings";
+            this.ModelManager = modelManager;
+            this.embedder = modelManager.GetModelEmbedder();
+            this.modelName = modelManager.GetModelName();
+            summarizedText = "";
+            embeddingColumnName = $"{this.modelName}Embeddings";
         }
 
         public string ModelType
         {
-            get { return modelType; }
+            get { return modelName; }
         }
 
         public DataTable GetVectorDatabase()
@@ -32,53 +36,62 @@ namespace EdgeRag
 
         public async Task InitializeDatabaseAsync()
         {
-            vectorDatabase.Columns.Add("incidentNumber", typeof(long));
-            vectorDatabase.Columns.Add("incidentDetails", typeof(string));
-            vectorDatabase.Columns.Add("incidentResponse", typeof(string));
-            vectorDatabase.Columns.Add("incidentSolution", typeof(string));
-            vectorDatabase.Columns.Add(embeddingColumnName, typeof(double[]));
-
-            // Check if the database JSON file exists; if not, initialize a new DataTable
-            if (File.Exists(jsonDbPath))
+            await Task.Run(() =>
             {
-                string existingJson = ReadJsonFromFile(jsonDbPath);
-                vectorDatabase = string.IsNullOrWhiteSpace(existingJson) ? new DataTable() : JsonToDataTable(existingJson);
-            }
+                vectorDatabase.Columns.Add("incidentNumber", typeof(long));
+                vectorDatabase.Columns.Add("incidentDetails", typeof(string));
+                vectorDatabase.Columns.Add("incidentResponse", typeof(string));
+                vectorDatabase.Columns.Add("incidentSolution", typeof(string));
+                vectorDatabase.Columns.Add(embeddingColumnName, typeof(double[]));
+
+                if (File.Exists(jsonDbPath))
+                {
+                    string existingJson = ReadJsonFromFile(jsonDbPath);
+                    vectorDatabase = string.IsNullOrWhiteSpace(existingJson) ? new DataTable() : JsonToDataTable(existingJson);
+                }
+            });
         }
 
         public async Task<double[]> GenerateEmbeddingsAsync(string textToEmbed)
         {
-            // Directly call the synchronous method without await
-            float[] embeddingsFloat = embedder.GetEmbeddings(textToEmbed);
-            // Convert each float to double
-            double[] embeddingsDouble = embeddingsFloat.Select(f => (double)f).ToArray();
-            return embeddingsDouble;
+            return await Task.Run(() =>
+            {
+                float[] embeddingsFloat = embedder.GetEmbeddings(textToEmbed);
+                double[] embeddingsDouble = embeddingsFloat.Select(f => (double)f).ToArray();
+                return embeddingsDouble;
+            });
         }
 
-        public async Task<string> QueryDatabase(string query, int numTopMatches)
+        public async Task<(string summarizedText, long[] incidentNumbers, double[] scores)> QueryDatabase(string query, int numTopMatches)
         {
+            summarizedText = "";
             var queryEmbeddings = await GenerateEmbeddingsAsync(query);
-            List<Tuple<double, string>> scores = new List<Tuple<double, string>>();
+            List<Tuple<double, long, string>> scoresIncidents = new List<Tuple<double, long, string>>();
 
             foreach (DataRow row in vectorDatabase.Rows)
             {
                 var factEmbeddings = (double[])row[embeddingColumnName];
-                var score = VectorSearchUtility.CosineSimilarity(queryEmbeddings, factEmbeddings);
-                string originalText = $"{row["incidentDetails"]} {row["incidentResponse"]} {row["incidentSolution"]}";
-                scores.Add(new Tuple<double, string>(score, originalText));
+                double score = VectorSearchUtility.CosineSimilarity(queryEmbeddings, factEmbeddings);
+                long incidentNumber = Convert.ToInt64(row["incidentNumber"]);
+                string originalText = $"{row["incidentSolution"]}";
+                scoresIncidents.Add(new Tuple<double, long, string>(score, incidentNumber, originalText));
             }
 
             // Sort the scores to find the top matches
-            var topMatches = scores.OrderByDescending(s => s.Item1).Take(numTopMatches).ToList();
-            var queriedPrompt = query;
+            var topMatches = scoresIncidents.OrderByDescending(s => s.Item1).Take(numTopMatches).ToList();
 
-            // Append the top matching texts to the queriedPrompt
+            // Extract incident numbers and scores into separate arrays for return
+            long[] incidentNumbers = topMatches.Select(m => m.Item2).ToArray();
+            double[] scores = topMatches.Select(m => m.Item1).ToArray();
+
+            // Generate summarized text using direct string concatenation
             foreach (var match in topMatches)
             {
-                queriedPrompt += $"{match.Item2}\n";
+                summarizedText += $"Incident Number: {match.Item2}, Score: {match.Item1:F3}, Details: {match.Item3}\n";
             }
 
-            return queriedPrompt;
+            // Return the summarized text, incident numbers, and their scores
+            return (summarizedText, incidentNumbers, scores);
         }
 
         public string DataTableToJson(DataTable dataTable)
