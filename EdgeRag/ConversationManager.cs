@@ -1,7 +1,6 @@
 ﻿using LLama;
 using LLama.Common;
 
-
 namespace EdgeRag
 {
     public class ConversationManager
@@ -84,41 +83,46 @@ namespace EdgeRag
 
         public async Task StartChatAsync(bool useDatabaseForChat)
         {
-            if (session != null)
+            if (session == null) return;
+
+            OnMessage?.Invoke("Chat session started, please input your query:\n");
+            while (true)
             {
-                OnMessage?.Invoke("Chat session started, please input query:\n");
-                while (true)
+                string userInput = await inputHandler.ReadLineAsync();
+
+                if (string.IsNullOrWhiteSpace(userInput) || userInput.ToLower() == "exit")
                 {
-                    string prompt = await inputHandler.ReadLineAsync();
-
-                    // Check if the user input is empty or contains "exit"
-                    if (string.IsNullOrWhiteSpace(prompt) || prompt.ToLower() == "exit")
-                    {
-                        OnMessage?.Invoke("Exiting chat session.");
-                        break;
-                    }
-
-                    if (useDatabaseForChat)
-                    {
-                        // Query the database and get results
-                        var queryResults = await databaseManager.QueryDatabase(prompt, numTopMatches);
-                        string summarizedTextResponse = await InteractWithModelAsync($"Summarize the troubleshooting steps: {queryResults.summarizedText}", maxTokens);
-
-                        // Join the incident numbers and scores arrays into strings for display
-                        string incidentNumbersStr = string.Join(", ", queryResults.incidentNumbers);
-                        string scoresStr = string.Join(", ", queryResults.scores.Select(score => score.ToString("F2"))); // Formatting scores to 2 decimal places
-
-                        // Display the results
-                        OnMessage?.Invoke($"\nIncident numbers: [{incidentNumbersStr}]\t Scores: [{scoresStr}]\n");
-                        OnMessage?.Invoke(summarizedTextResponse + "\n"); // Display the model's response correctly after awaiting its result
-                    }
-                    else
-                    {
-                        // If not using the database for chat, directly interact with the model using the user input
-                        string response = await InteractWithModelAsync(prompt, maxTokens);
-                        OnMessage?.Invoke(response + "\n");
-                    }
+                    OnMessage?.Invoke("Exiting chat session.");
+                    break;
                 }
+
+                if (useDatabaseForChat)
+                {
+                    var withDatabaseResponse = await databaseManager.QueryDatabase(userInput, numTopMatches);
+                    DisplayGraphicalScores(withDatabaseResponse.incidentNumbers, withDatabaseResponse.scores);
+                    string response = await InteractWithModelAsync(withDatabaseResponse.summarizedText, maxTokens);
+                    OnMessage?.Invoke(response + "\n");
+                }
+                else
+                {
+                    string response = await InteractWithModelAsync(userInput, maxTokens);
+                    OnMessage?.Invoke(response + "\n");
+                }
+            }
+        }
+
+        private void DisplayGraphicalScores(long[] incidentNumbers, double[] scores)
+        {
+            int maxStars = 50;
+            OnMessage?.Invoke($"Most similar tickets:\n");
+            for (int i = 0; i < incidentNumbers.Length && i < 3; i++)
+            {
+                long incidentNumber = incidentNumbers[i];
+                double score = scores[i];
+                int starsCount = (int)Math.Round(score * maxStars);
+                string stars = new string('*', starsCount).PadRight(maxStars, '-');
+
+                OnMessage?.Invoke($"Incident {incidentNumber}: [{stars}] {score:F2}\n");
             }
         }
 

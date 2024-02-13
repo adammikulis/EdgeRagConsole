@@ -13,11 +13,7 @@ namespace EdgeRag
         static async Task Main(string[] args)
         {
             string modelDirectoryPath = @"C:/ai/models"; // Change this path if you have models saved elsewhere
-            string databaseJsonPath = "C:/ai/data/synthetic/syntheticData.json";
-
-            bool useChat = false; // Turn on for chat functionality or off to just generate synthetic data
-            bool useDatabaseForChat = false; // Turn on to use vector databases for response
-            int numSyntheticDataToGenerate = 256; // Increase above 0 to generate more incident reports
+            string databaseJsonPath = "C:/ai/data/synthetic/syntheticData.json"; // Change this path if you would like to save the data elsewhere
             int numTopMatches = 3; // This is when querying the database of facts
 
             string[] systemMessages = { $"You are a chatbot who needs to solve the user's query by giving many detailed steps" };
@@ -27,9 +23,9 @@ namespace EdgeRag
             int maxTokens = 4096;
             int numGpuLayers = 33; // Adjust based on VRAM capability
             uint numCpuThreads = 8;
-            float temperature = 0.5f; // Adjust as needed
+            float temperature = 0.5f; // Lower is more deterministic, higher is more random
             
-            string[] antiPrompts = { "<end>" };
+            string[] antiPrompts = { "<end>" }; // This is what the LLM emits to stop the message
             
             IInputHandler inputHandler = new ConsoleInputHandler();
 
@@ -42,18 +38,43 @@ namespace EdgeRag
             ConversationManager conversationManager = new ConversationManagerConsole(inputHandler, modelLoaderOutputs, databaseManager, maxTokens, temperature, systemMessages, antiPrompts, numTopMatches);
             SyntheticDataGenerator syntheticDataGenerator = new SyntheticDataGenerator(modelManager, databaseManager, conversationManager);
 
+            // Basic menu loop
+            while (true)
+            {
+                Console.WriteLine("\nMenu:");
+                Console.WriteLine("1. Chat");
+                Console.WriteLine("2. Chat using Database");
+                Console.WriteLine("3. Generate Questions and Chat using Database");
+                Console.WriteLine("4. Generate Questions and Quit");
+                Console.WriteLine("5. Quit");
+                Console.Write("Select an option: ");
+                string option = Console.ReadLine();
 
-            if (numSyntheticDataToGenerate > 0)
-            {
-                syntheticDataGenerator.GenerateITDataPipeline(numSyntheticDataToGenerate, databaseJsonPath).Wait();
-                if (useChat)
+                switch (option)
                 {
-                    await conversationManager.StartChatAsync(useDatabaseForChat);
+                    case "1":
+                        await conversationManager.StartChatAsync(false);
+                        break;
+                    case "2":
+                        await conversationManager.StartChatAsync(true);
+                        break;
+                    case "3":
+                        Console.Write("Enter the number of questions to generate: ");
+                        int numQuestions = Convert.ToInt32(Console.ReadLine());
+                        await syntheticDataGenerator.GenerateITDataPipeline(numQuestions, databaseJsonPath);
+                        await conversationManager.StartChatAsync(true);
+                        break;
+                    case "4":
+                        Console.Write("Enter the number of questions to generate: ");
+                        numQuestions = Convert.ToInt32(Console.ReadLine());
+                        await syntheticDataGenerator.GenerateITDataPipeline(numQuestions, databaseJsonPath);
+                        return;
+                    case "5":
+                        return;
+                    default:
+                        Console.WriteLine("Invalid option, please try again.");
+                        break;
                 }
-            }
-            else if (useChat)
-            {
-                await conversationManager.StartChatAsync(useDatabaseForChat);
             }
         }
     }
