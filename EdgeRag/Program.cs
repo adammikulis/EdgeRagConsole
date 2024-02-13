@@ -15,9 +15,9 @@ namespace EdgeRag
             string modelDirectoryPath = @"C:/ai/models"; // Change this path if you have models saved elsewhere
             string databaseJsonPath = "C:/ai/data/synthetic/syntheticData.json";
 
-            bool useChat = true; // Turn on for chat functionality or off to just generate synthetic data
-            bool useDatabaseForChat = true; // Turn on to use vector databases for response
-            int numSyntheticDataToGenerate = 0; // Increase above 0 to generate more incident reports
+            bool useChat = false; // Turn on for chat functionality or off to just generate synthetic data
+            bool useDatabaseForChat = false; // Turn on to use vector databases for response
+            int numSyntheticDataToGenerate = 256; // Increase above 0 to generate more incident reports
             int numTopMatches = 3; // This is when querying the database of facts
 
             string[] systemMessages = { $"You are a chatbot who needs to solve the user's query by giving many detailed steps" };
@@ -37,10 +37,9 @@ namespace EdgeRag
             ModelManagerConsole modelManager = new ModelManagerConsole(modelDirectoryPath, seed, contextSize, numGpuLayers, numCpuThreads);
             ModelManagerOutputs modelLoaderOutputs = await modelManager.InitializeAsync(inputHandler);
 
-            // Initialize DatabaseManager if useDatabase is true
             DatabaseManager databaseManager = new DatabaseManager(databaseJsonPath, modelManager);
             await databaseManager.InitializeDatabaseAsync();
-            ConversationManager conversationManager = new ConversationManagerConsole(inputHandler, modelLoaderOutputs, databaseManager, useDatabaseForChat, maxTokens, temperature, systemMessages, antiPrompts, numTopMatches);
+            ConversationManager conversationManager = new ConversationManagerConsole(inputHandler, modelLoaderOutputs, databaseManager, maxTokens, temperature, systemMessages, antiPrompts, numTopMatches);
             SyntheticDataGenerator syntheticDataGenerator = new SyntheticDataGenerator(modelManager, databaseManager, conversationManager);
 
 
@@ -49,12 +48,12 @@ namespace EdgeRag
                 syntheticDataGenerator.GenerateITDataPipeline(numSyntheticDataToGenerate, databaseJsonPath).Wait();
                 if (useChat)
                 {
-                    await conversationManager.StartChatAsync();
+                    await conversationManager.StartChatAsync(useDatabaseForChat);
                 }
             }
             else if (useChat)
             {
-                await conversationManager.StartChatAsync();
+                await conversationManager.StartChatAsync(useDatabaseForChat);
             }
         }
     }

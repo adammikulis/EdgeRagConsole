@@ -6,7 +6,6 @@ namespace EdgeRag
 {
     public class ConversationManager
     {
-        private bool useDatabaseForChat;
         private string[] systemMessages;
         private string[] antiPrompts;
 
@@ -27,7 +26,7 @@ namespace EdgeRag
         private IInputHandler inputHandler;
         public event Action<string> OnMessage = delegate { };
 
-        public ConversationManager(IInputHandler inputHandler, ModelManagerOutputs modelLoaderOutputs, DatabaseManager? databaseManager, bool useDatabaseForChat, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts, int numTopMatches)
+        public ConversationManager(IInputHandler inputHandler, ModelManagerOutputs modelLoaderOutputs, DatabaseManager? databaseManager, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts, int numTopMatches)
         {
             this.inputHandler = inputHandler;
             this.model = modelLoaderOutputs.model;
@@ -40,7 +39,6 @@ namespace EdgeRag
             this.systemMessages = systemMessages;
             this.numTopMatches = numTopMatches;
             this.databaseManager = databaseManager;
-            this.useDatabaseForChat = useDatabaseForChat;
             systemMessage = 0;
             prompt = "";
             InitializeConversation();
@@ -84,7 +82,7 @@ namespace EdgeRag
             session = new ChatSession(executor);
         }
 
-        public async Task StartChatAsync()
+        public async Task StartChatAsync(bool useDatabaseForChat)
         {
             if (session != null)
             {
@@ -172,7 +170,7 @@ namespace EdgeRag
 
     public class ConversationManagerConsole : ConversationManager
     {
-        public ConversationManagerConsole(IInputHandler inputHandler, ModelManagerOutputs modelLoaderOutputs, DatabaseManager? databaseManager, bool useDatabaseForChat, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts, int numTopMatches) : base(inputHandler, modelLoaderOutputs, databaseManager, useDatabaseForChat, maxTokens, temperature, systemMessages, antiPrompts, numTopMatches)
+        public ConversationManagerConsole(IInputHandler inputHandler, ModelManagerOutputs modelLoaderOutputs, DatabaseManager? databaseManager, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts, int numTopMatches) : base(inputHandler, modelLoaderOutputs, databaseManager, maxTokens, temperature, systemMessages, antiPrompts, numTopMatches)
         {
             OnMessage += Console.Write;
         }
