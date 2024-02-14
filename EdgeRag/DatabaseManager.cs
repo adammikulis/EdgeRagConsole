@@ -9,10 +9,8 @@ namespace EdgeRag
     {
         private IOManager iOManager;
         private DataTable vectorDatabase;
-        private ModelManager ModelManager;
-        private LLamaEmbedder embedder;
+        private ModelManager modelManager;
         private int numTopMatches;
-        private string modelName;
         public string jsonDbPath;
         public string embeddingColumnName;
         public string summarizedText;
@@ -20,11 +18,11 @@ namespace EdgeRag
         {
             this.iOManager = iOManager;
             this.jsonDbPath = jsonDbPath;
-            this.ModelManager = modelManager;
+            this.modelManager = modelManager;
             this.numTopMatches = numTopMatches;
             vectorDatabase = new DataTable();
             summarizedText = "";
-            embeddingColumnName = $"{this.modelName}Embeddings";
+            embeddingColumnName = $"{modelManager.modelName}Embeddings";
         }
 
         public static async Task<DatabaseManager> CreateAsync(IOManager ioManager, ModelManager modelManager, string jsonDbPath, int numTopMatches )
@@ -54,11 +52,11 @@ namespace EdgeRag
 
         public async Task<double[]> GenerateEmbeddingsAsync(string textToEmbed)
         {
-            if (embedder == null) throw new InvalidOperationException("Embedder is not initialized.");
+            if (modelManager.embedder == null) throw new InvalidOperationException("Embedder is not initialized.");
 
             return await Task.Run(() =>
             {
-                float[] embeddingsFloat = embedder.GetEmbeddings(textToEmbed);
+                float[] embeddingsFloat = modelManager.embedder.GetEmbeddings(textToEmbed);
                 double[] embeddingsDouble = embeddingsFloat.Select(f => (double)f).ToArray();
                 return embeddingsDouble;
             });

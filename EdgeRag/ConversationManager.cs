@@ -11,16 +11,14 @@ namespace EdgeRag
 
         private float temperature;
         private string prompt;
-        private int numTopMatches;
         private int maxTokens;
         private int systemMessage;
 
         private LLamaWeights? model;
         private ModelParams? modelParams;
-        private LLamaEmbedder? embedder;
-        private LLamaContext? context;
-        private InteractiveExecutor? executor;
-        private ChatSession? session;
+        public LLamaContext? context;
+        public InteractiveExecutor? executor;
+        public ChatSession? session;
         public DatabaseManager? databaseManager; 
 
         public event Action<string> OnMessage = delegate { };
@@ -30,13 +28,11 @@ namespace EdgeRag
             this.iOManager = iOManager;
             this.model = modelManager.model;
             this.modelParams = modelManager.modelParams;
-            this.embedder = modelManager.embedder;
             this.context = modelManager.context;
             this.maxTokens = maxTokens;
             this.temperature = temperature;
             this.antiPrompts = antiPrompts;
             this.systemMessages = systemMessages;
-            this.numTopMatches = numTopMatches;
             this.databaseManager = databaseManager;
             systemMessage = 0;
             prompt = "";
@@ -52,15 +48,19 @@ namespace EdgeRag
         
         private async Task InitializeAsync()
         {
-            if (model == null || modelParams == null)
+            await Task.Run(() =>
             {
-                OnMessage?.Invoke("Model or modelParams is null. Cannot initialize conversation.");
-                return;
-            }
+                if (model == null || modelParams == null)
+                {
+                    OnMessage?.Invoke("Model or modelParams is null. Cannot initialize conversation.");
+                    return;
+                }
 
-            context = model.CreateContext(modelParams);
-            executor = new InteractiveExecutor(context);
-            session = new ChatSession(executor);
+                context = model.CreateContext(modelParams);
+                executor = new InteractiveExecutor(context);
+                session = new ChatSession(executor);
+            });
+             
         }
 
         public async Task StartChatAsync(bool useDatabaseForChat)
