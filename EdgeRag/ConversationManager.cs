@@ -90,7 +90,7 @@ namespace EdgeRag
             {
                 string userInput = await inputHandler.ReadLineAsync();
 
-                if (string.IsNullOrWhiteSpace(userInput) || userInput.ToLower() == "exit")
+                if (string.IsNullOrWhiteSpace(userInput) || userInput.ToLower() == "exit" || userInput.ToLower() == "back" || userInput.ToLower() == "quit")
                 {
                     OnMessage?.Invoke("Exiting chat session.");
                     break;
@@ -100,13 +100,13 @@ namespace EdgeRag
                 {
                     var withDatabaseResponse = await databaseManager.QueryDatabase(userInput, numTopMatches);
                     DisplayGraphicalScores(withDatabaseResponse.incidentNumbers, withDatabaseResponse.scores);
-                    string response = await InteractWithModelAsync(withDatabaseResponse.summarizedText, maxTokens);
-                    OnMessage?.Invoke(response + "\n");
+                    string response = await InteractWithModelAsync(withDatabaseResponse.summarizedText, maxTokens / 8);
+                    Console.Write(response + "\n");
                 }
                 else
                 {
-                    string response = await InteractWithModelAsync(userInput, maxTokens);
-                    OnMessage?.Invoke(response + "\n");
+                    string response = await InteractWithModelAsync(userInput, maxTokens / 16);
+                    Console.Write(response + "\n");
                 }
             }
         }
@@ -153,6 +153,7 @@ namespace EdgeRag
             await foreach (var text in session.ChatAsync(new ChatHistory.Message(AuthorRole.User, fullPrompt), new InferenceParams { MaxTokens = maxTokens, Temperature = temperature, AntiPrompts = antiPrompts }))
             {
                 response += text;
+                Console.Write(text);
             }
             return response;
         }

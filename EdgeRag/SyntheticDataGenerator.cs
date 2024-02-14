@@ -36,7 +36,7 @@ namespace EdgeRag
             for (int i = 0; i < n; i++)
             {
                 currentIncidentNumber++;
-                OnMessage?.Invoke($"Generating item {currentIncidentNumber}...\n");
+                Console.WriteLine($"Generating incident {currentIncidentNumber}...\n");
                 string selectedTheme = SelectRandomTheme();
 
                 DataRow newRow = vectorDatabase.NewRow();
@@ -53,7 +53,8 @@ namespace EdgeRag
                 newRow["incidentSolution"] = incidentSolution;
 
                 // Generate embeddings for the incidentSolution
-                double[] embeddings = await databaseManager.GenerateEmbeddingsAsync(incidentSolution);
+                Console.WriteLine($"Generating embeddings for incident {currentIncidentNumber}\n");
+                double[] embeddings = await databaseManager.GenerateEmbeddingsAsync(incidentDetails);
                 newRow[embeddingColumnName] = embeddings;
 
                 vectorDatabase.Rows.Add(newRow);

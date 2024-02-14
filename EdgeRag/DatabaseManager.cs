@@ -2,6 +2,7 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using LLama;
+using System.Text.RegularExpressions;
 
 namespace EdgeRag
 {
@@ -73,7 +74,7 @@ namespace EdgeRag
                 var factEmbeddings = (double[])row[embeddingColumnName];
                 double score = VectorSearchUtility.CosineSimilarity(queryEmbeddings, factEmbeddings);
                 long incidentNumber = Convert.ToInt64(row["incidentNumber"]);
-                string originalText = $"{row["incidentDetails"]} {row["incidentSolution"]}";
+                string originalText = $"{row["incidentSolution"]}";
                 scoresIncidents.Add(new Tuple<double, long, string>(score, incidentNumber, originalText));
             }
 
@@ -85,11 +86,13 @@ namespace EdgeRag
             double[] scores = topMatches.Select(m => m.Item1).ToArray();
 
             // Generate summarized text using direct string concatenation
-            foreach (var match in topMatches)
-            {
-                summarizedText += $"{match.Item3} ";
-            }
+            //foreach (var match in topMatches)
+            //{
+            //    summarizedText += $"{match.Item3} ";
+            //}
 
+            summarizedText += $"{topMatches[0].Item3} "; // Only use top match, not getting good results from combined tickets
+            
             // Return the summarized text, incident numbers, and their scores
             return (summarizedText, incidentNumbers, scores);
         }
