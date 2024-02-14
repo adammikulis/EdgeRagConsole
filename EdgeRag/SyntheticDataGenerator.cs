@@ -20,7 +20,6 @@ namespace EdgeRag
         private string embeddingColumnName;
         private long currentIncidentNumber;
 
-
         public SyntheticDataGenerator(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, ConversationManager conversationManager)
         {
             this.iOManager = iOManager;
@@ -43,7 +42,10 @@ namespace EdgeRag
 
         public async Task InitializeAsync()
         {
-            currentIncidentNumber = DetermineStartingIncidentNumber();
+            await Task.Run(() =>
+            {
+                currentIncidentNumber = DetermineStartingIncidentNumber();
+            });
         }
         public async Task GenerateITDataPipeline(int numQuestions)
         {

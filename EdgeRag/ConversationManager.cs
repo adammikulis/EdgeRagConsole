@@ -6,6 +6,8 @@ namespace EdgeRag
     public class ConversationManager
     {
         private IOManager iOManager;
+        private ModelManager modelManager;
+        private DatabaseManager databaseManager;
         private string[] systemMessages;
         private string[] antiPrompts;
 
@@ -14,21 +16,17 @@ namespace EdgeRag
         private int maxTokens;
         private int systemMessage;
 
-        private LLamaWeights? model;
-        private ModelParams? modelParams;
-        public LLamaContext? context;
         public InteractiveExecutor? executor;
         public ChatSession? session;
-        public DatabaseManager? databaseManager; 
+        
 
         public event Action<string> OnMessage = delegate { };
 
         public ConversationManager(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts)
         {
             this.iOManager = iOManager;
-            this.model = modelManager.model;
-            this.modelParams = modelManager.modelParams;
-            this.context = modelManager.context;
+            this.databaseManager = databaseManager;
+            this.modelManager = modelManager;
             this.maxTokens = maxTokens;
             this.temperature = temperature;
             this.antiPrompts = antiPrompts;
@@ -50,14 +48,13 @@ namespace EdgeRag
         {
             await Task.Run(() =>
             {
-                if (model == null || modelParams == null)
+                if (modelManager.model == null || modelManager.modelParams == null)
                 {
                     OnMessage?.Invoke("Model or modelParams is null. Cannot initialize conversation.");
                     return;
                 }
 
-                context = model.CreateContext(modelParams);
-                executor = new InteractiveExecutor(context);
+                executor = new InteractiveExecutor(modelManager.context);
                 session = new ChatSession(executor);
             });
              

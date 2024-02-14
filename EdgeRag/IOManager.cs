@@ -27,7 +27,10 @@ namespace EdgeRag
 
         public async Task InitializeAsync()
         {
-            SendMessage("IO Manager initialized!");
+            await Task.Run(() =>
+            {
+                SendMessage("IO Manager initialized!");
+            });            
         }
 
         public void SendMessage(string message)

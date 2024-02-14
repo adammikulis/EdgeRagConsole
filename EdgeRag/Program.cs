@@ -28,14 +28,7 @@ namespace EdgeRag
             string[] antiPrompts = { "<end>" }; // This is what the LLM emits to stop the message
             int numStars = 50; // This is for rendering the menu
 
-            IOManager iOManager = await IOManager.CreateAsync(numStars);
-            iOManager.OnOutputMessage += Console.Write;
-
-            // Initialize ModelLoader and load model
-            ModelManager modelManager = await ModelManager.CreateAsync(iOManager, modelDirectoryPath, seed, contextSize, numGpuLayers, numCpuThreads);
-            DatabaseManager databaseManager = await DatabaseManager.CreateAsync(iOManager, modelManager, databaseJsonPath, numTopMatches);
-            ConversationManager conversationManager = await ConversationManager.CreateAsync(iOManager, modelManager, databaseManager, maxTokens, temperature, systemMessages, antiPrompts);
-            SyntheticDataGenerator syntheticDataGenerator = await SyntheticDataGenerator.CreateAsync(iOManager, modelManager, databaseManager, conversationManager);
+            var pipelineManager = await PipelineManager.CreateAsync(modelDirectoryPath, databaseJsonPath, numTopMatches, seed, contextSize, maxTokens, numGpuLayers, numCpuThreads, temperature, systemMessages, antiPrompts, numStars);
 
             // Basic menu loop
             while (true)
@@ -52,21 +45,21 @@ namespace EdgeRag
                 switch (option)
                 {
                     case "1":
-                        await conversationManager.StartChatAsync(false);
+                        await pipelineManager.conversationManager.StartChatAsync(false);
                         break;
                     case "2":
-                        await conversationManager.StartChatAsync(true);
+                        await pipelineManager.conversationManager.StartChatAsync(true);
                         break;
                     case "3":
                         Console.Write("Enter the number of questions to generate: ");
                         int numQuestions = Convert.ToInt32(Console.ReadLine());
-                        await syntheticDataGenerator.GenerateITDataPipeline(numQuestions);
-                        await conversationManager.StartChatAsync(true);
+                        await pipelineManager.syntheticDataGenerator.GenerateITDataPipeline(numQuestions);
+                        await pipelineManager.conversationManager.StartChatAsync(true);
                         break;
                     case "4":
                         Console.Write("Enter the number of questions to generate: ");
                         numQuestions = Convert.ToInt32(Console.ReadLine());
-                        await syntheticDataGenerator.GenerateITDataPipeline(numQuestions);
+                        await pipelineManager.syntheticDataGenerator.GenerateITDataPipeline(numQuestions);
                         return;
                     case "5":
                         return;
