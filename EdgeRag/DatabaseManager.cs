@@ -11,33 +11,30 @@ namespace EdgeRag
         private DataTable vectorDatabase;
         private ModelManager ModelManager;
         private LLamaEmbedder embedder;
+        private int numTopMatches;
         private string modelName;
-        private string jsonDbPath;
-        string embeddingColumnName;
-        string summarizedText;
-        public DatabaseManager(IOManager iOManager, string jsonDbPath, ModelManager modelManager)
+        public string jsonDbPath;
+        public string embeddingColumnName;
+        public string summarizedText;
+        public DatabaseManager(IOManager iOManager, ModelManager modelManager, string jsonDbPath, int numTopMatches)
         {
             this.iOManager = iOManager;
             this.jsonDbPath = jsonDbPath;
             this.ModelManager = modelManager;
+            this.numTopMatches = numTopMatches;
             vectorDatabase = new DataTable();
             summarizedText = "";
             embeddingColumnName = $"{this.modelName}Embeddings";
         }
 
-        public static async Task<DatabaseManager> CreateAsync(IOManager ioManager, string jsonDbPath, ModelManager modelManager)
+        public static async Task<DatabaseManager> CreateAsync(IOManager ioManager, ModelManager modelManager, string jsonDbPath, int numTopMatches )
         {
-            var databaseManager = new DatabaseManager(ioManager, jsonDbPath, modelManager);
-            await databaseManager.InitializeDatabaseAsync();
+            var databaseManager = new DatabaseManager(ioManager, modelManager, jsonDbPath, numTopMatches);
+            await databaseManager.InitializeAsync();
             return databaseManager;
         }
 
-        public DataTable GetVectorDatabase()
-        {
-            return vectorDatabase;
-        }
-
-        public async Task InitializeDatabaseAsync()
+        public async Task InitializeAsync()
         {
             await Task.Run(() =>
             {
@@ -57,6 +54,8 @@ namespace EdgeRag
 
         public async Task<double[]> GenerateEmbeddingsAsync(string textToEmbed)
         {
+            if (embedder == null) throw new InvalidOperationException("Embedder is not initialized.");
+
             return await Task.Run(() =>
             {
                 float[] embeddingsFloat = embedder.GetEmbeddings(textToEmbed);
@@ -65,7 +64,7 @@ namespace EdgeRag
             });
         }
 
-        public async Task<(string summarizedText, long[] incidentNumbers, double[] scores)> QueryDatabase(string query, int numTopMatches)
+        public async Task<(string summarizedText, long[] incidentNumbers, double[] scores)> QueryDatabase(string query)
         {
             summarizedText = "";
             var queryEmbeddings = await GenerateEmbeddingsAsync(query);
@@ -136,6 +135,16 @@ namespace EdgeRag
         public string ReadJsonFromFile(string filePath)
         {
             return File.Exists(filePath) ? File.ReadAllText(filePath) : string.Empty;
+        }
+
+        public DataTable GetVectorDatabase()
+        {
+            return vectorDatabase;
+        }
+        
+        public string GetJsonDbPath()
+        {
+            return jsonDbPath;
         }
     }
 }

@@ -14,9 +14,11 @@ namespace EdgeRag
         private DatabaseManager databaseManager;
         private ConversationManager conversationManager;
         private DataTable vectorDatabase;
+        private string jsonDbPath;
         private int maxTokens;
         private string modelName;
         private string embeddingColumnName;
+        private long currentIncidentNumber;
 
 
         public SyntheticDataGenerator(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, ConversationManager conversationManager)
@@ -28,14 +30,25 @@ namespace EdgeRag
             this.maxTokens = conversationManager.GetMaxTokens();
             this.vectorDatabase = databaseManager.GetVectorDatabase();
             modelName = modelManager.modelName;
+            jsonDbPath = databaseManager.jsonDbPath;
             embeddingColumnName = $"{modelName}Embeddings";
         }
 
-        public async Task GenerateITDataPipeline(int n, string databaseJsonPath)
+        public static async Task<SyntheticDataGenerator> CreateAsync(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, ConversationManager conversationManager)
         {
-            long currentIncidentNumber = DetermineStartingIncidentNumber(databaseJsonPath);
+            var syntheticDataGenerator = new SyntheticDataGenerator(iOManager, modelManager, databaseManager, conversationManager);
+            await syntheticDataGenerator.InitializeAsync();
+            return syntheticDataGenerator;
+        }
 
-            for (int i = 0; i < n; i++)
+        public async Task InitializeAsync()
+        {
+            currentIncidentNumber = DetermineStartingIncidentNumber();
+        }
+        public async Task GenerateITDataPipeline(int numQuestions)
+        {
+
+            for (int i = 0; i < numQuestions; i++)
             {
                 currentIncidentNumber++;
                 iOManager.SendMessage($"Generating item {currentIncidentNumber}...\n");
@@ -63,14 +76,14 @@ namespace EdgeRag
 
             // Serialize DataTable to JSON and save
             string json = JsonConvert.SerializeObject(vectorDatabase, Formatting.Indented);
-            System.IO.File.WriteAllText(databaseJsonPath, json);
+            System.IO.File.WriteAllText(databaseManager.jsonDbPath, json);
         }
 
-        private long DetermineStartingIncidentNumber(string databaseJsonPath)
+        private long DetermineStartingIncidentNumber()
         {
-            if (System.IO.File.Exists(databaseJsonPath))
+            if (System.IO.File.Exists(jsonDbPath))
             {
-                string existingJson = System.IO.File.ReadAllText(databaseJsonPath);
+                string existingJson = System.IO.File.ReadAllText(jsonDbPath);
                 if (!string.IsNullOrWhiteSpace(existingJson))
                 {
                     DataTable existingTable = JsonConvert.DeserializeObject<DataTable>(existingJson);

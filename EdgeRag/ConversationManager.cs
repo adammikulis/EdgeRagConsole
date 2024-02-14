@@ -25,7 +25,7 @@ namespace EdgeRag
 
         public event Action<string> OnMessage = delegate { };
 
-        public ConversationManager(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts, int numTopMatches)
+        public ConversationManager(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts)
         {
             this.iOManager = iOManager;
             this.model = modelManager.model;
@@ -40,35 +40,17 @@ namespace EdgeRag
             this.databaseManager = databaseManager;
             systemMessage = 0;
             prompt = "";
-            InitializeConversation();
         }
 
-        public ChatSession? GetSession()
+        public static async Task<ConversationManager> CreateAsync(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts)
         {
-            return this.session;
+            var conversationManager = new ConversationManager(iOManager, modelManager, databaseManager, maxTokens, temperature, systemMessages, antiPrompts);
+            await conversationManager.InitializeAsync();
+            return conversationManager;
         }
 
-        public int GetMaxTokens()
-        {
-            return this.maxTokens;
-        }
-
-        public float GetTemperature()
-        {
-            return this.temperature;
-        }
-
-        public string[] GetAntiPrompts()
-        {
-            return this.antiPrompts;
-        }
-
-        public string[] GetSystemMessages()
-        {
-            return this.systemMessages;
-        }
-
-        private void InitializeConversation()
+        
+        private async Task InitializeAsync()
         {
             if (model == null || modelParams == null)
             {
@@ -90,7 +72,7 @@ namespace EdgeRag
             {
                 string userInput = await iOManager.ReadLineAsync();
 
-                if (string.IsNullOrWhiteSpace(userInput) || userInput.ToLower() == "exit")
+                if (string.IsNullOrWhiteSpace(userInput) || userInput.ToLower() == "exit" || userInput.ToLower() == "back")
                 {
                     iOManager.SendMessage("Exiting chat session.");
                     break;
@@ -98,7 +80,7 @@ namespace EdgeRag
 
                 if (useDatabaseForChat)
                 {
-                    var withDatabaseResponse = await databaseManager.QueryDatabase(userInput, numTopMatches);
+                    var withDatabaseResponse = await databaseManager.QueryDatabase(userInput);
                     iOManager.DisplayGraphicalScores(withDatabaseResponse.incidentNumbers, withDatabaseResponse.scores);
                     string response = await InteractWithModelAsync(withDatabaseResponse.summarizedText, maxTokens);
                     iOManager.SendMessage(response + "\n");
@@ -141,5 +123,33 @@ namespace EdgeRag
             }
             return response;
         }
+
+        public ChatSession? GetSession()
+        {
+            return this.session;
+        }
+
+        public int GetMaxTokens()
+        {
+            return this.maxTokens;
+        }
+
+        public float GetTemperature()
+        {
+            return this.temperature;
+        }
+
+        public string[] GetAntiPrompts()
+        {
+            return this.antiPrompts;
+        }
+
+        public string[] GetSystemMessages()
+        {
+            return this.systemMessages;
+        }
+
+
+
     }
 }

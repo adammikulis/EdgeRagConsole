@@ -33,12 +33,9 @@ namespace EdgeRag
 
             // Initialize ModelLoader and load model
             ModelManager modelManager = await ModelManager.CreateAsync(iOManager, modelDirectoryPath, seed, contextSize, numGpuLayers, numCpuThreads);
-            
-            DatabaseManager databaseManager = await DatabaseManager.CreateAsync(iOManager, databaseJsonPath, modelManager);
-            
-            ConversationManager conversationManager = new ConversationManager(iOManager, modelManager, databaseManager, maxTokens, temperature, systemMessages, antiPrompts, numTopMatches);
-            
-            SyntheticDataGenerator syntheticDataGenerator = new SyntheticDataGenerator(modelManager, databaseManager, conversationManager);
+            DatabaseManager databaseManager = await DatabaseManager.CreateAsync(iOManager, modelManager, databaseJsonPath, numTopMatches);
+            ConversationManager conversationManager = await ConversationManager.CreateAsync(iOManager, modelManager, databaseManager, maxTokens, temperature, systemMessages, antiPrompts);
+            SyntheticDataGenerator syntheticDataGenerator = await SyntheticDataGenerator.CreateAsync(iOManager, modelManager, databaseManager, conversationManager);
 
             // Basic menu loop
             while (true)
@@ -63,13 +60,13 @@ namespace EdgeRag
                     case "3":
                         Console.Write("Enter the number of questions to generate: ");
                         int numQuestions = Convert.ToInt32(Console.ReadLine());
-                        await syntheticDataGenerator.GenerateITDataPipeline(numQuestions, databaseJsonPath);
+                        await syntheticDataGenerator.GenerateITDataPipeline(numQuestions);
                         await conversationManager.StartChatAsync(true);
                         break;
                     case "4":
                         Console.Write("Enter the number of questions to generate: ");
                         numQuestions = Convert.ToInt32(Console.ReadLine());
-                        await syntheticDataGenerator.GenerateITDataPipeline(numQuestions, databaseJsonPath);
+                        await syntheticDataGenerator.GenerateITDataPipeline(numQuestions);
                         return;
                     case "5":
                         return;
