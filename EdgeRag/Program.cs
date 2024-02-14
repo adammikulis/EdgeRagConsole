@@ -26,16 +26,18 @@ namespace EdgeRag
             float temperature = 0.5f; // Lower is more deterministic, higher is more random
             
             string[] antiPrompts = { "<end>" }; // This is what the LLM emits to stop the message
-            
-            IInputHandler inputHandler = new ConsoleInputHandler();
+            int numStars = 50; // This is for rendering the menu
+
+            IOManager iOManager = await IOManager.CreateAsync(numStars);
+            iOManager.OnOutputMessage += Console.Write;
 
             // Initialize ModelLoader and load model
-            ModelManagerConsole modelManager = new ModelManagerConsole(modelDirectoryPath, seed, contextSize, numGpuLayers, numCpuThreads);
-            ModelManagerOutputs modelLoaderOutputs = await modelManager.InitializeAsync(inputHandler);
-
-            DatabaseManager databaseManager = new DatabaseManager(databaseJsonPath, modelManager);
-            await databaseManager.InitializeDatabaseAsync();
-            ConversationManager conversationManager = new ConversationManagerConsole(inputHandler, modelLoaderOutputs, databaseManager, maxTokens, temperature, systemMessages, antiPrompts, numTopMatches);
+            ModelManager modelManager = await ModelManager.CreateAsync(iOManager, modelDirectoryPath, seed, contextSize, numGpuLayers, numCpuThreads);
+            
+            DatabaseManager databaseManager = await DatabaseManager.CreateAsync(iOManager, databaseJsonPath, modelManager);
+            
+            ConversationManager conversationManager = new ConversationManager(iOManager, modelManager, databaseManager, maxTokens, temperature, systemMessages, antiPrompts, numTopMatches);
+            
             SyntheticDataGenerator syntheticDataGenerator = new SyntheticDataGenerator(modelManager, databaseManager, conversationManager);
 
             // Basic menu loop

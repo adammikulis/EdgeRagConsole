@@ -5,6 +5,7 @@ namespace EdgeRag
 {
     public class ConversationManager
     {
+        private IOManager iOManager;
         private string[] systemMessages;
         private string[] antiPrompts;
 
@@ -22,16 +23,15 @@ namespace EdgeRag
         private ChatSession? session;
         public DatabaseManager? databaseManager; 
 
-        private IInputHandler inputHandler;
         public event Action<string> OnMessage = delegate { };
 
-        public ConversationManager(IInputHandler inputHandler, ModelManagerOutputs modelLoaderOutputs, DatabaseManager? databaseManager, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts, int numTopMatches)
+        public ConversationManager(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts, int numTopMatches)
         {
-            this.inputHandler = inputHandler;
-            this.model = modelLoaderOutputs.model;
-            this.modelParams = modelLoaderOutputs.modelParams;
-            this.embedder = modelLoaderOutputs.embedder;
-            this.context = modelLoaderOutputs.context;
+            this.iOManager = iOManager;
+            this.model = modelManager.model;
+            this.modelParams = modelManager.modelParams;
+            this.embedder = modelManager.embedder;
+            this.context = modelManager.context;
             this.maxTokens = maxTokens;
             this.temperature = temperature;
             this.antiPrompts = antiPrompts;
@@ -85,44 +85,29 @@ namespace EdgeRag
         {
             if (session == null) return;
 
-            OnMessage?.Invoke("Chat session started, please input your query:\n");
+            iOManager.SendMessage("Chat session started, please input your query:\n");
             while (true)
             {
-                string userInput = await inputHandler.ReadLineAsync();
+                string userInput = await iOManager.ReadLineAsync();
 
                 if (string.IsNullOrWhiteSpace(userInput) || userInput.ToLower() == "exit")
                 {
-                    OnMessage?.Invoke("Exiting chat session.");
+                    iOManager.SendMessage("Exiting chat session.");
                     break;
                 }
 
                 if (useDatabaseForChat)
                 {
                     var withDatabaseResponse = await databaseManager.QueryDatabase(userInput, numTopMatches);
-                    DisplayGraphicalScores(withDatabaseResponse.incidentNumbers, withDatabaseResponse.scores);
+                    iOManager.DisplayGraphicalScores(withDatabaseResponse.incidentNumbers, withDatabaseResponse.scores);
                     string response = await InteractWithModelAsync(withDatabaseResponse.summarizedText, maxTokens);
-                    OnMessage?.Invoke(response + "\n");
+                    iOManager.SendMessage(response + "\n");
                 }
                 else
                 {
                     string response = await InteractWithModelAsync(userInput, maxTokens);
-                    OnMessage?.Invoke(response + "\n");
+                    iOManager.SendMessage(response + "\n");
                 }
-            }
-        }
-
-        private void DisplayGraphicalScores(long[] incidentNumbers, double[] scores)
-        {
-            int maxStars = 50;
-            OnMessage?.Invoke($"Most similar tickets:\n");
-            for (int i = 0; i < incidentNumbers.Length && i < 3; i++)
-            {
-                long incidentNumber = incidentNumbers[i];
-                double score = scores[i];
-                int starsCount = (int)Math.Round(score * maxStars);
-                string stars = new string('*', starsCount).PadRight(maxStars, '-');
-
-                OnMessage?.Invoke($"Incident {incidentNumber}: [{stars}] {score:F2}\n");
             }
         }
 
@@ -155,28 +140,6 @@ namespace EdgeRag
                 response += text;
             }
             return response;
-        }
-
-    }
-
-    public interface IInputHandler
-    {
-        Task<string> ReadLineAsync();
-    }
-
-    public class ConsoleInputHandler : IInputHandler
-    {
-        public async Task<string> ReadLineAsync()
-        {
-            return await Task.Run(() => Console.ReadLine());
-        }
-    }
-
-    public class ConversationManagerConsole : ConversationManager
-    {
-        public ConversationManagerConsole(IInputHandler inputHandler, ModelManagerOutputs modelLoaderOutputs, DatabaseManager? databaseManager, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts, int numTopMatches) : base(inputHandler, modelLoaderOutputs, databaseManager, maxTokens, temperature, systemMessages, antiPrompts, numTopMatches)
-        {
-            OnMessage += Console.Write;
         }
     }
 }

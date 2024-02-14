@@ -9,6 +9,7 @@ namespace EdgeRag
 {
     public class SyntheticDataGenerator
     {
+        private IOManager iOManager;
         private ModelManager modelManager;
         private DatabaseManager databaseManager;
         private ConversationManager conversationManager;
@@ -18,14 +19,15 @@ namespace EdgeRag
         private string embeddingColumnName;
 
 
-        public SyntheticDataGenerator(ModelManager modelManager, DatabaseManager databaseManager, ConversationManager conversationManager)
+        public SyntheticDataGenerator(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, ConversationManager conversationManager)
         {
+            this.iOManager = iOManager;
             this.modelManager = modelManager;
             this.databaseManager = databaseManager;
             this.conversationManager = conversationManager;
             this.maxTokens = conversationManager.GetMaxTokens();
             this.vectorDatabase = databaseManager.GetVectorDatabase();
-            modelName = modelManager.GetModelName();
+            modelName = modelManager.modelName;
             embeddingColumnName = $"{modelName}Embeddings";
         }
 
@@ -36,7 +38,7 @@ namespace EdgeRag
             for (int i = 0; i < n; i++)
             {
                 currentIncidentNumber++;
-                OnMessage?.Invoke($"Generating item {currentIncidentNumber}...\n");
+                iOManager.SendMessage($"Generating item {currentIncidentNumber}...\n");
                 string selectedTheme = SelectRandomTheme();
 
                 DataRow newRow = vectorDatabase.NewRow();
@@ -91,7 +93,8 @@ namespace EdgeRag
         private async Task<string> GenerateContentAsync(string theme, string previousContent, string contentType)
         {
             string prompt = "";
-            int tokenAllocationFactor = 16; // Default allocation factor
+            int tokenAllocationFactor = 16; // This allows us to easily increase/reduce the max amount of tokens generated for each stage
+
 
             switch (contentType)
             {
@@ -104,7 +107,7 @@ namespace EdgeRag
                     tokenAllocationFactor = 8;
                     break;
                 case "solution":
-                    prompt = $"{previousContent} As the user, summarize and describe how you solved the issue with the provided steps.";
+                    prompt = $"{previousContent} Summarize and describe how you solved the issue with the provided steps.";
                     tokenAllocationFactor = 4;
                     break;
             }
@@ -112,9 +115,5 @@ namespace EdgeRag
             int allocatedTokens = Math.Min(maxTokens, maxTokens / tokenAllocationFactor);
             return await conversationManager.InteractWithModelAsync(prompt, allocatedTokens);
         }
-
-
-        // Event handler for messages
-        public event Action<string> OnMessage = delegate { };
     }
 }

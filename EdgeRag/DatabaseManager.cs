@@ -7,26 +7,29 @@ namespace EdgeRag
 {
     public class DatabaseManager
     {
-        private DataTable vectorDatabase = new DataTable();
+        private IOManager iOManager;
+        private DataTable vectorDatabase;
         private ModelManager ModelManager;
         private LLamaEmbedder embedder;
         private string modelName;
         private string jsonDbPath;
         string embeddingColumnName;
         string summarizedText;
-        public DatabaseManager(string jsonDbPath, ModelManager modelManager)
+        public DatabaseManager(IOManager iOManager, string jsonDbPath, ModelManager modelManager)
         {
+            this.iOManager = iOManager;
             this.jsonDbPath = jsonDbPath;
             this.ModelManager = modelManager;
-            this.embedder = modelManager.GetModelEmbedder();
-            this.modelName = modelManager.GetModelName();
+            vectorDatabase = new DataTable();
             summarizedText = "";
             embeddingColumnName = $"{this.modelName}Embeddings";
         }
 
-        public string ModelType
+        public static async Task<DatabaseManager> CreateAsync(IOManager ioManager, string jsonDbPath, ModelManager modelManager)
         {
-            get { return modelName; }
+            var databaseManager = new DatabaseManager(ioManager, jsonDbPath, modelManager);
+            await databaseManager.InitializeDatabaseAsync();
+            return databaseManager;
         }
 
         public DataTable GetVectorDatabase()
