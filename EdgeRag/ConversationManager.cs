@@ -43,7 +43,6 @@ namespace EdgeRag
             return conversationManager;
         }
 
-        
         private async Task InitializeAsync()
         {
             await Task.Run(() =>
@@ -145,8 +144,5 @@ namespace EdgeRag
         {
             return this.systemMessages;
         }
-
-
-
     }
 }

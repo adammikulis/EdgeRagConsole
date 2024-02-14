@@ -93,7 +93,7 @@ namespace EdgeRag
             model = LLamaWeights.LoadFromFile(modelParams);
             embedder = new LLamaEmbedder(model, modelParams);
             context = model.CreateContext(modelParams);
-            iOManager.SendMessage($"\nModel: {modelName} from {SelectedModelPath} with embedder {embedder} loaded\n");
+            iOManager.SendMessage($"\nModel: {modelName} from {SelectedModelPath}loaded\n");
         }
     }
 }

@@ -24,50 +24,28 @@ namespace EdgeRag
             int numGpuLayers = 33; // Adjust based on VRAM capability
             uint numCpuThreads = 8;
             float temperature = 0.5f; // Lower is more deterministic, higher is more random
-            
             string[] antiPrompts = { "<end>" }; // This is what the LLM emits to stop the message
-            int numStars = 50; // This is for rendering the menu
+            
+            int numStars = 50; // This is for rendering
+
 
             var pipelineManager = await PipelineManager.CreateAsync(modelDirectoryPath, databaseJsonPath, numTopMatches, seed, contextSize, maxTokens, numGpuLayers, numCpuThreads, temperature, systemMessages, antiPrompts, numStars);
 
-            // Basic menu loop
-            while (true)
-            {
-                Console.WriteLine("\nMenu:");
-                Console.WriteLine("1. Chat");
-                Console.WriteLine("2. Chat using Database");
-                Console.WriteLine("3. Generate Questions and Chat using Database");
-                Console.WriteLine("4. Generate Questions and Quit");
-                Console.WriteLine("5. Quit");
-                Console.Write("Select an option: ");
-                string option = Console.ReadLine();
-
-                switch (option)
-                {
-                    case "1":
-                        await pipelineManager.conversationManager.StartChatAsync(false);
-                        break;
-                    case "2":
-                        await pipelineManager.conversationManager.StartChatAsync(true);
-                        break;
-                    case "3":
-                        Console.Write("Enter the number of questions to generate: ");
-                        int numQuestions = Convert.ToInt32(Console.ReadLine());
-                        await pipelineManager.syntheticDataGenerator.GenerateITDataPipeline(numQuestions);
-                        await pipelineManager.conversationManager.StartChatAsync(true);
-                        break;
-                    case "4":
-                        Console.Write("Enter the number of questions to generate: ");
-                        numQuestions = Convert.ToInt32(Console.ReadLine());
-                        await pipelineManager.syntheticDataGenerator.GenerateITDataPipeline(numQuestions);
-                        return;
-                    case "5":
-                        return;
-                    default:
-                        Console.WriteLine("Invalid option, please try again.");
-                        break;
-                }
-            }
+            // Menu loop
+            await pipelineManager.iOManager.RunMenuAsync(
+            chat: () => pipelineManager.conversationManager.StartChatAsync(false),
+            chatUsingDatabase: () => pipelineManager.conversationManager.StartChatAsync(true),
+            generateQuestionsAndChat: async (numQuestions) => {
+                await pipelineManager.syntheticDataGenerator.GenerateITDataPipeline(numQuestions);
+                await pipelineManager.conversationManager.StartChatAsync(true);
+            },
+            generateQuestions: async (numQuestions) => {
+                await pipelineManager.syntheticDataGenerator.GenerateITDataPipeline(numQuestions);
+                Environment.Exit(0);
+            },
+            quit: () => {
+                Environment.Exit(0);
+            });
         }
     }
 }

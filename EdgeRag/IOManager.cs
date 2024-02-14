@@ -30,7 +30,7 @@ namespace EdgeRag
             await Task.Run(() =>
             {
                 SendMessage("IO Manager initialized!");
-            });            
+            });
         }
 
         public void SendMessage(string message)
@@ -56,6 +56,46 @@ namespace EdgeRag
         {
             return await Task.Run(() => Console.ReadLine());
         }
-    }
 
+        public async Task RunMenuAsync(Func<Task> chat, Func<Task> chatUsingDatabase, Func<int, Task> generateQuestionsAndChat, Func<int, Task> generateQuestions, Action quit)
+        {
+            while (true)
+            {
+                SendMessage("\nMenu:");
+                SendMessage("\n1. Chat");
+                SendMessage("\n2. Chat using Database");
+                SendMessage("\n3. Generate Questions and Chat using Database");
+                SendMessage("\n4. Generate Questions and Quit");
+                SendMessage("\n5. Quit");
+                SendMessage("\nSelect an option: ");
+
+                var option = await ReadLineAsync();
+                switch (option)
+                {
+                    case "1":
+                        await chat();
+                        break;
+                    case "2":
+                        await chatUsingDatabase();
+                        break;
+                    case "3":
+                        SendMessage("Enter the number of questions to generate: ");
+                        int numQuestions = Convert.ToInt32(await ReadLineAsync());
+                        await generateQuestionsAndChat(numQuestions);
+                        break;
+                    case "4":
+                        SendMessage("Enter the number of questions to generate: ");
+                        numQuestions = Convert.ToInt32(await ReadLineAsync());
+                        await generateQuestions(numQuestions);
+                        break;
+                    case "5":
+                        quit();
+                        return;
+                    default:
+                        SendMessage("Invalid option, please try again.");
+                        break;
+                }
+            }
+        }
+    }
 }
