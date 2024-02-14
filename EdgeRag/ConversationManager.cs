@@ -115,6 +115,7 @@ namespace EdgeRag
 
             await foreach (var text in session.ChatAsync(new ChatHistory.Message(AuthorRole.User, fullPrompt), new InferenceParams { MaxTokens = maxTokens, Temperature = temperature, AntiPrompts = antiPrompts }))
             {
+                iOManager.SendMessage(text);
                 response += text;
             }
             return response;
