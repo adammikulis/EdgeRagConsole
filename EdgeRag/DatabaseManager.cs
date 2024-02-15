@@ -56,13 +56,11 @@ namespace EdgeRag
 
         public async Task<double[]> GenerateEmbeddingsAsync(string textToEmbed)
         {
-            return await Task.Run(() =>
-            {
-                float[] embeddingsFloat = modelManager.embedder.GetEmbeddings(textToEmbed);
-                double[] embeddingsDouble = embeddingsFloat.Select(f => (double)f).ToArray();
-                return embeddingsDouble;
-            });
+            float[] embeddingsFloat = await modelManager.embedder.GetEmbeddings(textToEmbed);
+            double[] embeddingsDouble = embeddingsFloat.Select(f => (double)f).ToArray();
+            return embeddingsDouble;
         }
+
 
         public async Task<(string summarizedText, long[] incidentNumbers, double[] scores)> QueryDatabase(string query)
         {
