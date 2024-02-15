@@ -78,12 +78,12 @@ namespace EdgeRag
                 {
                     var withDatabaseResponse = await databaseManager.QueryDatabase(userInput);
                     iOManager.DisplayGraphicalScores(withDatabaseResponse.incidentNumbers, withDatabaseResponse.scores);
-                    string response = await InteractWithModelAsync(withDatabaseResponse.summarizedText, maxTokens);
+                    string response = await InteractWithModelAsync(withDatabaseResponse.summarizedText, maxTokens, false);
                     iOManager.SendMessage(response + "\n");
                 }
                 else
                 {
-                    string response = await InteractWithModelAsync(userInput, maxTokens);
+                    string response = await InteractWithModelAsync(userInput, maxTokens, false);
                     iOManager.SendMessage(response + "\n");
                 }
             }
@@ -105,7 +105,7 @@ namespace EdgeRag
             return cleanedString;
         }
 
-        public async Task<string> InteractWithModelAsync(string prompt, int maxTokens)
+        public async Task<string> InteractWithModelAsync(string prompt, int maxTokens, bool internalChat)
         {
             if (session == null) return "Session still initializing, please wait.\n";
             string response = "";
@@ -115,7 +115,11 @@ namespace EdgeRag
 
             await foreach (var text in session.ChatAsync(new ChatHistory.Message(AuthorRole.User, fullPrompt), new InferenceParams { MaxTokens = maxTokens, Temperature = temperature, AntiPrompts = antiPrompts }))
             {
-                iOManager.SendMessage(text);
+                // This allows control over whether the message is streamed or not
+                if (!internalChat)
+                {
+                    iOManager.SendMessage(text);
+                }
                 response += text;
             }
             return response;

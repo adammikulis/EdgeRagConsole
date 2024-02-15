@@ -1,6 +1,5 @@
 ﻿using System.Data;
 using LLama;
-using Newtonsoft.Json;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -15,7 +14,9 @@ namespace EdgeRag
         private ConversationManager conversationManager;
         private DataTable vectorDatabase;
         private string jsonDbPath;
+        private string json;
         private int maxTokens;
+        private int questionBatchSize;
         private string modelName;
         private string embeddingColumnName;
         private long currentIncidentNumber;
@@ -28,12 +29,14 @@ namespace EdgeRag
             this.conversationManager = conversationManager;
             this.maxTokens = conversationManager.GetMaxTokens();
             this.vectorDatabase = databaseManager.GetVectorDatabase();
+            this.questionBatchSize = questionBatchSize;
             modelName = modelManager.modelName;
             jsonDbPath = databaseManager.jsonDbPath;
+            json = "";
             embeddingColumnName = $"{modelName}Embeddings";
         }
 
-        public static async Task<SyntheticDataGenerator> CreateAsync(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, ConversationManager conversationManager)
+        public static async Task<SyntheticDataGenerator> CreateAsync(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, ConversationManager conversationManager, int questionBatchSize)
         {
             var syntheticDataGenerator = new SyntheticDataGenerator(iOManager, modelManager, databaseManager, conversationManager);
             await syntheticDataGenerator.InitializeAsync();
@@ -44,11 +47,21 @@ namespace EdgeRag
         {
             await Task.Run(() =>
             {
-                currentIncidentNumber = DetermineStartingIncidentNumber();
+                currentIncidentNumber = databaseManager.highestIncidentNumber;
             });
         }
+
+        private string SelectRandomTheme()
+        {
+            string[] themes = { "a specific Apple device", "a specific Android device", "a specific Windows device", "a specific printer or copier", "a specific networking device", "a specific piece of software", "a specific piece of tech hardware" };
+            Random rand = new Random();
+            return themes[rand.Next(themes.Length)];
+        }
+
         public async Task GenerateITDataPipeline(int numQuestions)
         {
+            // Sets a minimum of 1 for questionBatchSize
+            questionBatchSize = Math.Max(1, questionBatchSize);
 
             for (int i = 0; i < numQuestions; i++)
             {
@@ -59,76 +72,37 @@ namespace EdgeRag
                 DataRow newRow = vectorDatabase.NewRow();
                 newRow["incidentNumber"] = currentIncidentNumber;
 
-                // Sequentially generate and set the content, passing previous content as context
-                string incidentDetails = await GenerateContentAsync(selectedTheme, "", "details");
-                string incidentResponse = await GenerateContentAsync(selectedTheme, incidentDetails, "response");
-                string incidentSolution = await GenerateContentAsync(selectedTheme, incidentDetails + " " + incidentResponse, "solution");
+                // Sequentially generate and set the content, passing previous content as context (this is what LangChain does)
+                string incidentDetails = await GenerateContentAsync($"Describe a tech issue as the User in 2-3 sentences about {selectedTheme}", 16);
+                string supportResponse = await GenerateContentAsync($"Work with the user to troubleshoot their issue and ask for any additional information needed for " + incidentDetails, 8);
+                string userResponse = await GenerateContentAsync($"Troubleshoot " + incidentDetails + " with " + supportResponse, 8);
+                string incidentSolution = await GenerateContentAsync($"Solve and summarize" + incidentDetails + " based on " + userResponse, 4);
 
                 // Assign generated content to the newRow
                 newRow["incidentDetails"] = incidentDetails;
-                newRow["incidentResponse"] = incidentResponse;
+                newRow["supportResponse"] = supportResponse;
+                newRow["userResponse"] = userResponse;
                 newRow["incidentSolution"] = incidentSolution;
 
-                // Generate embeddings for the incidentSolution
-                double[] embeddings = await databaseManager.GenerateEmbeddingsAsync(incidentSolution);
+                // Generate embeddings for the incidentDetails
+                double[] embeddings = await databaseManager.GenerateEmbeddingsAsync(incidentDetails);
                 newRow[embeddingColumnName] = embeddings;
 
                 vectorDatabase.Rows.Add(newRow);
-            }
 
-            // Serialize DataTable to JSON and save
-            string json = JsonConvert.SerializeObject(vectorDatabase, Formatting.Indented);
-            System.IO.File.WriteAllText(databaseManager.jsonDbPath, json);
-        }
-
-        private long DetermineStartingIncidentNumber()
-        {
-            if (System.IO.File.Exists(jsonDbPath))
-            {
-                string existingJson = System.IO.File.ReadAllText(jsonDbPath);
-                if (!string.IsNullOrWhiteSpace(existingJson))
+                // Save after every questionBatchSize items are added or if on the last item
+                if ((i + 1) % questionBatchSize == 0 || i == numQuestions - 1)
                 {
-                    DataTable existingTable = JsonConvert.DeserializeObject<DataTable>(existingJson);
-                    if (existingTable != null && existingTable.Rows.Count > 0)
-                    {
-                        return existingTable.AsEnumerable().Max(row => Convert.ToInt64(row["incidentNumber"]));
-                    }
+                    json = databaseManager.DataTableToJson(vectorDatabase);
+                    databaseManager.SaveJsonToFile(json, jsonDbPath);
                 }
             }
-            return 0;
         }
 
-        private string SelectRandomTheme()
+        private async Task<string> GenerateContentAsync(string generateContentPrompt, int tokenAllocationFactor)
         {
-            string[] themes = { "an Apple device", "an Android device", "a Windows device", "a printer or copier", "networking" };
-            Random rand = new Random();
-            return themes[rand.Next(themes.Length)];
-        }
-
-        private async Task<string> GenerateContentAsync(string theme, string previousContent, string contentType)
-        {
-            string prompt = "";
-            int tokenAllocationFactor = 16; // This allows us to easily increase/reduce the max amount of tokens generated for each stage
-
-
-            switch (contentType)
-            {
-                case "details":
-                    prompt = $"Describe a tech issue as the User in 2-3 sentences about {theme}.";
-                    tokenAllocationFactor = 16;
-                    break;
-                case "response":
-                    prompt = $"{previousContent} Summarize the issue and give 3-10 troubleshooting steps.";
-                    tokenAllocationFactor = 8;
-                    break;
-                case "solution":
-                    prompt = $"{previousContent} Summarize and describe how you solved the issue with the provided steps.";
-                    tokenAllocationFactor = 4;
-                    break;
-            }
-
             int allocatedTokens = Math.Min(maxTokens, maxTokens / tokenAllocationFactor);
-            return await conversationManager.InteractWithModelAsync(prompt, allocatedTokens);
+            return await conversationManager.InteractWithModelAsync(generateContentPrompt, allocatedTokens, false);
         }
     }
 }

@@ -16,7 +16,7 @@ namespace EdgeRag
             string databaseJsonPath = "C:/ai/data/synthetic/syntheticData.json"; // Change this path if you would like to save the data elsewhere
             int numTopMatches = 3; // This is when querying the database of facts
 
-            string[] systemMessages = { $"You are a chatbot who needs to solve the user's query by giving many detailed steps" };
+            string[] systemMessages = { $"Always be civil and kind" };
 
             uint seed = 1;
             uint contextSize = 4096;
@@ -25,11 +25,12 @@ namespace EdgeRag
             uint numCpuThreads = 8;
             float temperature = 0.5f; // Lower is more deterministic, higher is more random
             string[] antiPrompts = { "<end>" }; // This is what the LLM emits to stop the message
-            
+
+            int questionBatchSize = 2;
             int numStars = 50; // This is for rendering
 
 
-            var pipelineManager = await PipelineManager.CreateAsync(modelDirectoryPath, databaseJsonPath, numTopMatches, seed, contextSize, maxTokens, numGpuLayers, numCpuThreads, temperature, systemMessages, antiPrompts, numStars);
+            var pipelineManager = await PipelineManager.CreateAsync(modelDirectoryPath, databaseJsonPath, numTopMatches, seed, contextSize, maxTokens, numGpuLayers, numCpuThreads, temperature, systemMessages, antiPrompts, questionBatchSize, numStars);
 
             // Menu loop
             await pipelineManager.iOManager.RunMenuAsync(
