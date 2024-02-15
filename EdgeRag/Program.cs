@@ -16,7 +16,7 @@ namespace EdgeRag
             string databaseJsonPath = "C:/ai/data/synthetic/syntheticData.json"; // Change this path if you would like to save the data elsewhere
             int numTopMatches = 3; // This is when querying the database of facts
 
-            string[] systemMessages = { $"Always be civil and kind" };
+            string[] systemMessages = { $"" };
 
             uint seed = 1;
             uint contextSize = 4096;
@@ -26,7 +26,7 @@ namespace EdgeRag
             float temperature = 0.5f; // Lower is more deterministic, higher is more random
             string[] antiPrompts = { "<end>" }; // This is what the LLM emits to stop the message
 
-            int questionBatchSize = 2;
+            int questionBatchSize = 32;
             int numStars = 50; // This is for rendering
 
 

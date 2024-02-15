@@ -21,7 +21,7 @@ namespace EdgeRag
         private string embeddingColumnName;
         private long currentIncidentNumber;
 
-        public SyntheticDataGenerator(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, ConversationManager conversationManager)
+        public SyntheticDataGenerator(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, ConversationManager conversationManager, int questionBatchSize)
         {
             this.iOManager = iOManager;
             this.modelManager = modelManager;
@@ -38,7 +38,7 @@ namespace EdgeRag
 
         public static async Task<SyntheticDataGenerator> CreateAsync(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, ConversationManager conversationManager, int questionBatchSize)
         {
-            var syntheticDataGenerator = new SyntheticDataGenerator(iOManager, modelManager, databaseManager, conversationManager);
+            var syntheticDataGenerator = new SyntheticDataGenerator(iOManager, modelManager, databaseManager, conversationManager, questionBatchSize);
             await syntheticDataGenerator.InitializeAsync();
             return syntheticDataGenerator;
         }
@@ -73,10 +73,10 @@ namespace EdgeRag
                 newRow["incidentNumber"] = currentIncidentNumber;
 
                 // Sequentially generate and set the content, passing previous content as context (this is what LangChain does)
-                string incidentDetails = await GenerateContentAsync($"Describe a tech issue as the User in 2-3 sentences about {selectedTheme}", 16);
-                string supportResponse = await GenerateContentAsync($"Work with the user to troubleshoot their issue and ask for any additional information needed for " + incidentDetails, 8);
-                string userResponse = await GenerateContentAsync($"Troubleshoot " + incidentDetails + " with " + supportResponse, 8);
-                string incidentSolution = await GenerateContentAsync($"Solve and summarize" + incidentDetails + " based on " + userResponse, 4);
+                string incidentDetails = await GenerateContentAsync($"As the user, describe a tech issue you are having with {selectedTheme}", 16);
+                string supportResponse = await GenerateContentAsync($"As support, work with the user to troubleshoot their issue and ask for any additional information needed for " + incidentDetails, 8);
+                string userResponse = await GenerateContentAsync($"As the user, troubleshoot " + incidentDetails + " with tech support's steps: " + supportResponse, 8);
+                string incidentSolution = await GenerateContentAsync($"As tech support, solve and summarize" + incidentDetails + " based on " + userResponse, 4);
 
                 // Assign generated content to the newRow
                 newRow["incidentDetails"] = incidentDetails;
@@ -90,7 +90,7 @@ namespace EdgeRag
 
                 vectorDatabase.Rows.Add(newRow);
 
-                // Save after every questionBatchSize items are added or if on the last item
+                // Save after every questionBatchSize
                 if ((i + 1) % questionBatchSize == 0 || i == numQuestions - 1)
                 {
                     json = databaseManager.DataTableToJson(vectorDatabase);

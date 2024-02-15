@@ -38,6 +38,7 @@ namespace EdgeRag
         {
             await Task.Run(() =>
             {
+                DetermineStartingIncidentNumber();
                 vectorDatabase.Columns.Add("incidentNumber", typeof(long));
                 vectorDatabase.Columns.Add("incidentDetails", typeof(string));
                 vectorDatabase.Columns.Add("supportResponse", typeof(string));
@@ -51,14 +52,10 @@ namespace EdgeRag
                     vectorDatabase = string.IsNullOrWhiteSpace(existingJson) ? new DataTable() : JsonToDataTable(existingJson);
                 }
             });
-
-            DetermineStartingIncidentNumber();
         }
 
         public async Task<double[]> GenerateEmbeddingsAsync(string textToEmbed)
         {
-            if (modelManager.embedder == null) throw new InvalidOperationException("Embedder is not initialized.");
-
             return await Task.Run(() =>
             {
                 float[] embeddingsFloat = modelManager.embedder.GetEmbeddings(textToEmbed);
