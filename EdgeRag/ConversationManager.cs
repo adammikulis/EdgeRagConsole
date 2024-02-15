@@ -5,124 +5,87 @@ namespace EdgeRag
 {
     public class ConversationManager
     {
+        private IOManager iOManager;
+        private ModelManager modelManager;
+        private DatabaseManager databaseManager;
         private string[] systemMessages;
         private string[] antiPrompts;
 
         private float temperature;
         private string prompt;
-        private int numTopMatches;
         private int maxTokens;
         private int systemMessage;
 
-        private LLamaWeights? model;
-        private ModelParams? modelParams;
-        private LLamaEmbedder? embedder;
-        private LLamaContext? context;
-        private InteractiveExecutor? executor;
-        private ChatSession? session;
-        public DatabaseManager? databaseManager; 
+        public InteractiveExecutor? executor;
+        public ChatSession? session;
+        
 
-        private IInputHandler inputHandler;
         public event Action<string> OnMessage = delegate { };
 
-        public ConversationManager(IInputHandler inputHandler, ModelManagerOutputs modelLoaderOutputs, DatabaseManager? databaseManager, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts, int numTopMatches)
+        public ConversationManager(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts)
         {
-            this.inputHandler = inputHandler;
-            this.model = modelLoaderOutputs.model;
-            this.modelParams = modelLoaderOutputs.modelParams;
-            this.embedder = modelLoaderOutputs.embedder;
-            this.context = modelLoaderOutputs.context;
+            this.iOManager = iOManager;
+            this.databaseManager = databaseManager;
+            this.modelManager = modelManager;
             this.maxTokens = maxTokens;
             this.temperature = temperature;
             this.antiPrompts = antiPrompts;
             this.systemMessages = systemMessages;
-            this.numTopMatches = numTopMatches;
             this.databaseManager = databaseManager;
             systemMessage = 0;
             prompt = "";
-            InitializeConversation();
         }
 
-        public ChatSession? GetSession()
+        public static async Task<ConversationManager> CreateAsync(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts)
         {
-            return this.session;
+            var conversationManager = new ConversationManager(iOManager, modelManager, databaseManager, maxTokens, temperature, systemMessages, antiPrompts);
+            await conversationManager.InitializeAsync();
+            return conversationManager;
         }
 
-        public int GetMaxTokens()
+        private async Task InitializeAsync()
         {
-            return this.maxTokens;
-        }
-
-        public float GetTemperature()
-        {
-            return this.temperature;
-        }
-
-        public string[] GetAntiPrompts()
-        {
-            return this.antiPrompts;
-        }
-
-        public string[] GetSystemMessages()
-        {
-            return this.systemMessages;
-        }
-
-        private void InitializeConversation()
-        {
-            if (model == null || modelParams == null)
+            await Task.Run(() =>
             {
-                OnMessage?.Invoke("Model or modelParams is null. Cannot initialize conversation.");
-                return;
-            }
+                if (modelManager.model == null || modelManager.modelParams == null)
+                {
+                    OnMessage?.Invoke("Model or modelParams is null. Cannot initialize conversation.");
+                    return;
+                }
 
-            context = model.CreateContext(modelParams);
-            executor = new InteractiveExecutor(context);
-            session = new ChatSession(executor);
+                executor = new InteractiveExecutor(modelManager.context);
+                session = new ChatSession(executor);
+            });
+             
         }
 
         public async Task StartChatAsync(bool useDatabaseForChat)
         {
             if (session == null) return;
 
-            OnMessage?.Invoke("Chat session started, please input your query:\n");
+            iOManager.SendMessage("Chat session started, please input your query:\n");
             while (true)
             {
-                string userInput = await inputHandler.ReadLineAsync();
+                string userInput = await iOManager.ReadLineAsync();
 
-                if (string.IsNullOrWhiteSpace(userInput) || userInput.ToLower() == "exit" || userInput.ToLower() == "back" || userInput.ToLower() == "quit")
+                if (string.IsNullOrWhiteSpace(userInput) || userInput.ToLower() == "exit" || userInput.ToLower() == "back")
                 {
-                    OnMessage?.Invoke("Exiting chat session.");
+                    iOManager.SendMessage("Exiting chat session.");
                     break;
                 }
 
                 if (useDatabaseForChat)
                 {
-                    var withDatabaseResponse = await databaseManager.QueryDatabase(userInput, numTopMatches);
-                    DisplayGraphicalScores(withDatabaseResponse.incidentNumbers, withDatabaseResponse.scores);
-                    string response = await InteractWithModelAsync(withDatabaseResponse.summarizedText, maxTokens / 8);
-                    Console.Write(response + "\n");
+                    var withDatabaseResponse = await databaseManager.QueryDatabase(userInput);
+                    iOManager.DisplayGraphicalScores(withDatabaseResponse.incidentNumbers, withDatabaseResponse.scores);
+                    string response = await InteractWithModelAsync(withDatabaseResponse.summarizedText, maxTokens);
+                    iOManager.SendMessage(response + "\n");
                 }
                 else
                 {
-                    string response = await InteractWithModelAsync(userInput, maxTokens / 16);
-                    Console.Write(response + "\n");
+                    string response = await InteractWithModelAsync(userInput, maxTokens);
+                    iOManager.SendMessage(response + "\n");
                 }
-            }
-        }
-
-        private void DisplayGraphicalScores(long[] incidentNumbers, double[] scores)
-        {
-            int maxStars = 50;
-            OnMessage?.Invoke($"Most similar tickets:\n");
-            for (int i = 0; i < incidentNumbers.Length && i < 3; i++)
-            {
-                long incidentNumber = incidentNumbers[i];
-                double score = scores[i];
-                int starsCount = (int)Math.Round(score * maxStars);
-                string stars = new string('*', starsCount).PadRight(maxStars, '-');
-
-                OnMessage?.Invoke($"Incident {incidentNumber}: [{stars}] {score:F2}\n");
             }
         }
 
@@ -152,32 +115,35 @@ namespace EdgeRag
 
             await foreach (var text in session.ChatAsync(new ChatHistory.Message(AuthorRole.User, fullPrompt), new InferenceParams { MaxTokens = maxTokens, Temperature = temperature, AntiPrompts = antiPrompts }))
             {
+                iOManager.SendMessage(text);
                 response += text;
-                Console.Write(text);
             }
             return response;
         }
 
-    }
-
-    public interface IInputHandler
-    {
-        Task<string> ReadLineAsync();
-    }
-
-    public class ConsoleInputHandler : IInputHandler
-    {
-        public async Task<string> ReadLineAsync()
+        public ChatSession? GetSession()
         {
-            return await Task.Run(() => Console.ReadLine());
+            return this.session;
         }
-    }
 
-    public class ConversationManagerConsole : ConversationManager
-    {
-        public ConversationManagerConsole(IInputHandler inputHandler, ModelManagerOutputs modelLoaderOutputs, DatabaseManager? databaseManager, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts, int numTopMatches) : base(inputHandler, modelLoaderOutputs, databaseManager, maxTokens, temperature, systemMessages, antiPrompts, numTopMatches)
+        public int GetMaxTokens()
         {
-            OnMessage += Console.Write;
+            return this.maxTokens;
+        }
+
+        public float GetTemperature()
+        {
+            return this.temperature;
+        }
+
+        public string[] GetAntiPrompts()
+        {
+            return this.antiPrompts;
+        }
+
+        public string[] GetSystemMessages()
+        {
+            return this.systemMessages;
         }
     }
 }

@@ -24,58 +24,28 @@ namespace EdgeRag
             int numGpuLayers = 33; // Adjust based on VRAM capability
             uint numCpuThreads = 8;
             float temperature = 0.5f; // Lower is more deterministic, higher is more random
-            
             string[] antiPrompts = { "<end>" }; // This is what the LLM emits to stop the message
             
-            IInputHandler inputHandler = new ConsoleInputHandler();
+            int numStars = 50; // This is for rendering
 
-            // Initialize ModelLoader and load model
-            ModelManagerConsole modelManager = new ModelManagerConsole(modelDirectoryPath, seed, contextSize, numGpuLayers, numCpuThreads);
-            ModelManagerOutputs modelLoaderOutputs = await modelManager.InitializeAsync(inputHandler);
 
-            DatabaseManager databaseManager = new DatabaseManager(databaseJsonPath, modelManager);
-            await databaseManager.InitializeDatabaseAsync();
-            ConversationManager conversationManager = new ConversationManagerConsole(inputHandler, modelLoaderOutputs, databaseManager, maxTokens, temperature, systemMessages, antiPrompts, numTopMatches);
-            SyntheticDataGenerator syntheticDataGenerator = new SyntheticDataGenerator(modelManager, databaseManager, conversationManager);
+            var pipelineManager = await PipelineManager.CreateAsync(modelDirectoryPath, databaseJsonPath, numTopMatches, seed, contextSize, maxTokens, numGpuLayers, numCpuThreads, temperature, systemMessages, antiPrompts, numStars);
 
-            // Basic menu loop
-            while (true)
-            {
-                Console.WriteLine("\nMenu:");
-                Console.WriteLine("1. Chat");
-                Console.WriteLine("2. Chat using Database");
-                Console.WriteLine("3. Generate Questions and Chat using Database");
-                Console.WriteLine("4. Generate Questions and Quit");
-                Console.WriteLine("5. Quit");
-                Console.Write("Select an option: ");
-                string option = Console.ReadLine();
-
-                switch (option)
-                {
-                    case "1":
-                        await conversationManager.StartChatAsync(false);
-                        break;
-                    case "2":
-                        await conversationManager.StartChatAsync(true);
-                        break;
-                    case "3":
-                        Console.Write("Enter the number of questions to generate: ");
-                        int numQuestions = Convert.ToInt32(Console.ReadLine());
-                        await syntheticDataGenerator.GenerateITDataPipeline(numQuestions, databaseJsonPath);
-                        await conversationManager.StartChatAsync(true);
-                        break;
-                    case "4":
-                        Console.Write("Enter the number of questions to generate: ");
-                        numQuestions = Convert.ToInt32(Console.ReadLine());
-                        await syntheticDataGenerator.GenerateITDataPipeline(numQuestions, databaseJsonPath);
-                        return;
-                    case "5":
-                        return;
-                    default:
-                        Console.WriteLine("Invalid option, please try again.");
-                        break;
-                }
-            }
+            // Menu loop
+            await pipelineManager.iOManager.RunMenuAsync(
+            chat: () => pipelineManager.conversationManager.StartChatAsync(false),
+            chatUsingDatabase: () => pipelineManager.conversationManager.StartChatAsync(true),
+            generateQuestionsAndChat: async (numQuestions) => {
+                await pipelineManager.syntheticDataGenerator.GenerateITDataPipeline(numQuestions);
+                await pipelineManager.conversationManager.StartChatAsync(true);
+            },
+            generateQuestions: async (numQuestions) => {
+                await pipelineManager.syntheticDataGenerator.GenerateITDataPipeline(numQuestions);
+                Environment.Exit(0);
+            },
+            quit: () => {
+                Environment.Exit(0);
+            });
         }
     }
 }

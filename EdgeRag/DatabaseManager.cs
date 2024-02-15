@@ -8,34 +8,32 @@ namespace EdgeRag
 {
     public class DatabaseManager
     {
-        private DataTable vectorDatabase = new DataTable();
-        private ModelManager ModelManager;
-        private LLamaEmbedder embedder;
-        private string modelName;
-        private string jsonDbPath;
-        string embeddingColumnName;
-        string summarizedText;
-        public DatabaseManager(string jsonDbPath, ModelManager modelManager)
+        private IOManager iOManager;
+        private DataTable vectorDatabase;
+        private ModelManager modelManager;
+        private int numTopMatches;
+        public string jsonDbPath;
+        public string embeddingColumnName;
+        public string summarizedText;
+        public DatabaseManager(IOManager iOManager, ModelManager modelManager, string jsonDbPath, int numTopMatches)
         {
+            this.iOManager = iOManager;
             this.jsonDbPath = jsonDbPath;
-            this.ModelManager = modelManager;
-            this.embedder = modelManager.GetModelEmbedder();
-            this.modelName = modelManager.GetModelName();
+            this.modelManager = modelManager;
+            this.numTopMatches = numTopMatches;
+            vectorDatabase = new DataTable();
             summarizedText = "";
-            embeddingColumnName = $"{this.modelName}Embeddings";
+            embeddingColumnName = $"{modelManager.modelName}Embeddings";
         }
 
-        public string ModelType
+        public static async Task<DatabaseManager> CreateAsync(IOManager ioManager, ModelManager modelManager, string jsonDbPath, int numTopMatches )
         {
-            get { return modelName; }
+            var databaseManager = new DatabaseManager(ioManager, modelManager, jsonDbPath, numTopMatches);
+            await databaseManager.InitializeAsync();
+            return databaseManager;
         }
 
-        public DataTable GetVectorDatabase()
-        {
-            return vectorDatabase;
-        }
-
-        public async Task InitializeDatabaseAsync()
+        public async Task InitializeAsync()
         {
             await Task.Run(() =>
             {
@@ -55,15 +53,17 @@ namespace EdgeRag
 
         public async Task<double[]> GenerateEmbeddingsAsync(string textToEmbed)
         {
+            if (modelManager.embedder == null) throw new InvalidOperationException("Embedder is not initialized.");
+
             return await Task.Run(() =>
             {
-                float[] embeddingsFloat = embedder.GetEmbeddings(textToEmbed);
+                float[] embeddingsFloat = modelManager.embedder.GetEmbeddings(textToEmbed);
                 double[] embeddingsDouble = embeddingsFloat.Select(f => (double)f).ToArray();
                 return embeddingsDouble;
             });
         }
 
-        public async Task<(string summarizedText, long[] incidentNumbers, double[] scores)> QueryDatabase(string query, int numTopMatches)
+        public async Task<(string summarizedText, long[] incidentNumbers, double[] scores)> QueryDatabase(string query)
         {
             summarizedText = "";
             var queryEmbeddings = await GenerateEmbeddingsAsync(query);
@@ -136,6 +136,16 @@ namespace EdgeRag
         public string ReadJsonFromFile(string filePath)
         {
             return File.Exists(filePath) ? File.ReadAllText(filePath) : string.Empty;
+        }
+
+        public DataTable GetVectorDatabase()
+        {
+            return vectorDatabase;
+        }
+        
+        public string GetJsonDbPath()
+        {
+            return jsonDbPath;
         }
     }
 }
