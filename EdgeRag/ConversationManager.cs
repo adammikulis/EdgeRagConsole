@@ -9,16 +9,16 @@ namespace EdgeRag
         private ModelManager modelManager;
         private DatabaseManager databaseManager;
         private string[] systemMessages;
+        private int systemMessageNumber;
         private string[] antiPrompts;
+        private int antiPromptsNumber;
 
         private float temperature;
-        private string prompt;
         private int maxTokens;
-        private int systemMessage;
+        
 
         public InteractiveExecutor? executor;
         public ChatSession? session;
-        
 
         public event Action<string> OnMessage = delegate { };
 
@@ -32,8 +32,9 @@ namespace EdgeRag
             this.antiPrompts = antiPrompts;
             this.systemMessages = systemMessages;
             this.databaseManager = databaseManager;
-            systemMessage = 0;
-            prompt = "";
+            systemMessageNumber = 0;
+            antiPromptsNumber = 0;
+
         }
 
         public static async Task<ConversationManager> CreateAsync(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts)
@@ -52,6 +53,28 @@ namespace EdgeRag
                     OnMessage?.Invoke("Model or modelParams is null. Cannot initialize conversation.");
                     return;
                 }
+                if (maxTokens == 0)
+                {
+                    if (modelManager.modelType == "phi")
+                    {
+                        maxTokens = 2048;
+                    }
+                    else if (modelManager.modelType == "llama" || modelManager.modelType == "mistral")
+                    {
+                        maxTokens = 4096;
+                    }
+                    else if (modelManager.modelType == "mixtral")
+                    {
+                        maxTokens = 32768;
+                    }
+                    else if (modelManager.modelType == "codellama")
+                    {
+                        maxTokens = 65536;
+                    }
+
+                    iOManager.SendMessage($"{modelManager.modelType} detected, max tokens set to {maxTokens}");
+                }
+
 
                 executor = new InteractiveExecutor(modelManager.context);
                 session = new ChatSession(executor);
@@ -108,21 +131,18 @@ namespace EdgeRag
         public async Task<string> InteractWithModelAsync(string prompt, int maxTokens, bool internalChat)
         {
             if (session == null) return "Session still initializing, please wait.\n";
-            string response = "";
+            prompt = $"{systemMessages[systemMessageNumber]} {prompt}".Trim();
 
-            // Assuming systemMessages[systemMessage] is a prefix you want to add to every prompt
-            string fullPrompt = $"{systemMessages[systemMessage]} {prompt}".Trim();
-
-            await foreach (var text in session.ChatAsync(new ChatHistory.Message(AuthorRole.User, fullPrompt), new InferenceParams { MaxTokens = maxTokens, Temperature = temperature, AntiPrompts = antiPrompts }))
+            await foreach (var text in session.ChatAsync(new ChatHistory.Message(AuthorRole.User, prompt), new InferenceParams { MaxTokens = maxTokens, Temperature = temperature, AntiPrompts = antiPrompts }))
             {
                 // This allows control over whether the message is streamed or not
                 if (!internalChat)
                 {
                     iOManager.SendMessage(text);
                 }
-                response += text;
+                prompt += text;
             }
-            return response;
+            return prompt;
         }
 
         public ChatSession? GetSession()

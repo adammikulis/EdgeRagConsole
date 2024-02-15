@@ -50,7 +50,6 @@ namespace EdgeRag
                 currentIncidentNumber = databaseManager.highestIncidentNumber;
             });
         }
-
         private string SelectRandomTheme()
         {
             string[] themes = { "a specific Apple device", "a specific Android device", "a specific Windows device", "a specific printer or copier", "a specific networking device", "a specific piece of software", "a specific piece of tech hardware" };
@@ -73,10 +72,10 @@ namespace EdgeRag
                 newRow["incidentNumber"] = currentIncidentNumber;
 
                 // Sequentially generate and set the content, passing previous content as context (this is what LangChain does)
-                string incidentDetails = await GenerateContentAsync($"As the user, describe a tech issue you are having with {selectedTheme}", maxTokens / 8);
-                string supportResponse = await GenerateContentAsync($"As support, work with the user to troubleshoot their issue and ask for any additional information needed for " + incidentDetails, maxTokens / 4);
-                string userResponse = await GenerateContentAsync($"As the user, troubleshoot " + incidentDetails + " with tech support's steps: " + supportResponse, maxTokens / 2);
-                string incidentSolution = await GenerateContentAsync($"As tech support, solve and summarize" + incidentDetails + " based on " + userResponse, maxTokens);
+                string incidentDetails = await conversationManager.InteractWithModelAsync($"As the user, describe a tech issue you are having with {selectedTheme}", maxTokens / 8, false);
+                string supportResponse = await conversationManager.InteractWithModelAsync($"As support, work with the user to troubleshoot their issue and ask for any additional information needed for " + incidentDetails, maxTokens / 4, false);
+                string userResponse = await conversationManager.InteractWithModelAsync($"As the user, troubleshoot " + incidentDetails + " with tech support's steps: " + supportResponse, maxTokens / 2, false);
+                string incidentSolution = await conversationManager.InteractWithModelAsync($"As tech support, solve and summarize" + incidentDetails + " based on " + userResponse, maxTokens, false);
 
                 // Assign generated content to the newRow
                 newRow["incidentDetails"] = incidentDetails;
@@ -97,11 +96,6 @@ namespace EdgeRag
                     databaseManager.SaveJsonToFile(json, jsonDbPath);
                 }
             }
-        }
-
-        private async Task<string> GenerateContentAsync(string generateContentPrompt, int maxTokens)
-        {
-            return await conversationManager.InteractWithModelAsync(generateContentPrompt, maxTokens, false);
         }
     }
 }

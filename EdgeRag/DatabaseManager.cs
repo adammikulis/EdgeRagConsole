@@ -65,6 +65,12 @@ namespace EdgeRag
         public async Task<(string summarizedText, long[] incidentNumbers, double[] scores)> QueryDatabase(string query)
         {
             summarizedText = "";
+            // Check if the DataTable is empty
+            if (vectorDatabase.Rows.Count == 0)
+            {
+                return (summarizedText, new long[0], new double[0]);
+            }
+
             var queryEmbeddings = await GenerateEmbeddingsAsync(query);
             List<Tuple<double, long, string>> scoresIncidents = new List<Tuple<double, long, string>>();
 
@@ -73,28 +79,24 @@ namespace EdgeRag
                 var factEmbeddings = (double[])row[embeddingColumnName];
                 double score = VectorSearchUtility.CosineSimilarity(queryEmbeddings, factEmbeddings);
                 long incidentNumber = Convert.ToInt64(row["incidentNumber"]);
-                string originalText = $"{row["incidentSolution"]}";
+                string originalText = row["incidentSolution"].ToString();
                 scoresIncidents.Add(new Tuple<double, long, string>(score, incidentNumber, originalText));
             }
 
-            // Sort the scores to find the top matches
-            var topMatches = scoresIncidents.OrderByDescending(s => s.Item1).Take(numTopMatches).ToList();
+            // If no matches were found, return early with empty arrays
+            if (scoresIncidents.Count == 0)
+            {
+                return (summarizedText, new long[0], new double[0]);
+            }
 
-            // Extract incident numbers and scores into separate arrays for return
+            var topMatches = scoresIncidents.OrderByDescending(s => s.Item1).Take(numTopMatches).ToList();
             long[] incidentNumbers = topMatches.Select(m => m.Item2).ToArray();
             double[] scores = topMatches.Select(m => m.Item1).ToArray();
 
-            // Generate summarized text using direct string concatenation
-            //foreach (var match in topMatches)
-            //{
-            //    summarizedText += $"{match.Item3} ";
-            //}
-
-            summarizedText += $"{topMatches[0].Item3} "; // Only use top match, not getting good results from combined tickets
-            
-            // Return the summarized text, incident numbers, and their scores
+            summarizedText = topMatches.Count > 0 ? $"{topMatches[0].Item3} " : "";
             return (summarizedText, incidentNumbers, scores);
         }
+
 
         private long DetermineStartingIncidentNumber()
         {
@@ -153,22 +155,6 @@ namespace EdgeRag
         {
             return File.Exists(filePath) ? File.ReadAllText(filePath) : string.Empty;
         }
-
-        public async Task AppendRowToJsonFile(DataRow newRow)
-        {
-            // Deserialize the existing JSON file to a list of objects or a DataTable
-            DataTable currentData = JsonToDataTable(ReadJsonFromFile(jsonDbPath));
-
-            // Add the new row to the DataTable
-            currentData.ImportRow(newRow);
-
-            // Serialize the updated DataTable to JSON
-            string updatedJson = DataTableToJson(currentData);
-
-            // Save the updated JSON back to the file
-            SaveJsonToFile(updatedJson, jsonDbPath);
-        }
-
 
         public DataTable GetVectorDatabase()
         {

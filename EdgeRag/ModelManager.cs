@@ -43,6 +43,7 @@ namespace EdgeRag
 
         public async Task InitializeAsync()
         {
+            
             if (!Directory.Exists(directoryPath))
             {
                 iOManager.SendMessage("The directory does not exist.");
@@ -74,6 +75,27 @@ namespace EdgeRag
                     validModelSelected = true;
 
                     modelType = modelName.Split('-')[0].ToLower();
+
+                    if (contextSize == 0)
+                    {
+                        if (modelType == "phi")
+                        {
+                            contextSize = 2048;
+                        }
+                        else if (modelType == "llama" || modelType == "mistral")
+                        {
+                            contextSize = 4096;
+                        }
+                        else if (modelType == "mixtral")
+                        {
+                            contextSize = 32768;
+                        }
+                        else if (modelType == "codellama")
+                        {
+                            contextSize = 65536;
+                        }
+                        iOManager.SendMessage($"{modelType} detected, context size set to {contextSize}");
+                    }
                 }
                 else
                 {
@@ -81,6 +103,7 @@ namespace EdgeRag
                 }
             }
 
+                
             modelParams = new ModelParams(SelectedModelPath)
             {
                 Seed = seed,
