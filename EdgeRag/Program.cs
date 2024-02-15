@@ -19,8 +19,8 @@ namespace EdgeRag
             string[] systemMessages = { $"" };
 
             uint seed = 1;
-            uint contextSize = 4096;
-            int maxTokens = 4096;
+            uint contextSize = 2048;
+            int maxTokens = 2048;
             int numGpuLayers = 33; // Adjust based on VRAM capability
             uint numCpuThreads = 8;
             float temperature = 0.5f; // Lower is more deterministic, higher is more random
