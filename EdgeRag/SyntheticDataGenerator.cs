@@ -73,10 +73,10 @@ namespace EdgeRag
                 newRow["incidentNumber"] = currentIncidentNumber;
 
                 // Sequentially generate and set the content, passing previous content as context (this is what LangChain does)
-                string incidentDetails = await GenerateContentAsync($"As the user, describe a tech issue you are having with {selectedTheme}", 16);
-                string supportResponse = await GenerateContentAsync($"As support, work with the user to troubleshoot their issue and ask for any additional information needed for " + incidentDetails, 8);
-                string userResponse = await GenerateContentAsync($"As the user, troubleshoot " + incidentDetails + " with tech support's steps: " + supportResponse, 8);
-                string incidentSolution = await GenerateContentAsync($"As tech support, solve and summarize" + incidentDetails + " based on " + userResponse, 4);
+                string incidentDetails = await GenerateContentAsync($"As the user, describe a tech issue you are having with {selectedTheme}", maxTokens / 8);
+                string supportResponse = await GenerateContentAsync($"As support, work with the user to troubleshoot their issue and ask for any additional information needed for " + incidentDetails, maxTokens / 4);
+                string userResponse = await GenerateContentAsync($"As the user, troubleshoot " + incidentDetails + " with tech support's steps: " + supportResponse, maxTokens / 2);
+                string incidentSolution = await GenerateContentAsync($"As tech support, solve and summarize" + incidentDetails + " based on " + userResponse, maxTokens);
 
                 // Assign generated content to the newRow
                 newRow["incidentDetails"] = incidentDetails;
@@ -99,10 +99,9 @@ namespace EdgeRag
             }
         }
 
-        private async Task<string> GenerateContentAsync(string generateContentPrompt, int tokenReductionFactor)
+        private async Task<string> GenerateContentAsync(string generateContentPrompt, int maxTokens)
         {
-            int allocatedTokens = Math.Min(maxTokens, maxTokens / tokenReductionFactor);
-            return await conversationManager.InteractWithModelAsync(generateContentPrompt, allocatedTokens, false);
+            return await conversationManager.InteractWithModelAsync(generateContentPrompt, maxTokens, false);
         }
     }
 }
