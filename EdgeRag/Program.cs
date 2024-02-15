@@ -1,5 +1,6 @@
-﻿// Note: All data has been generated/tested with istral-7b-instruct-v0.2.Q8_0.gguf for consistency
+﻿// Note: All data has been generated/tested with mistral-7b-instruct-v0.2.Q8_0.gguf for consistency
 // Use mistral-7b-instruct-v0.2.Q8_0.gguf for best results
+// Use mistral-7b-instruct-v0.2.Q2_K.gguf for fastest/lowest memory network (at the cost of accuracy)
 
 using LLama;
 using System;

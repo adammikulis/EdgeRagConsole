@@ -99,9 +99,9 @@ namespace EdgeRag
             }
         }
 
-        private async Task<string> GenerateContentAsync(string generateContentPrompt, int tokenAllocationFactor)
+        private async Task<string> GenerateContentAsync(string generateContentPrompt, int tokenReductionFactor)
         {
-            int allocatedTokens = Math.Min(maxTokens, maxTokens / tokenAllocationFactor);
+            int allocatedTokens = Math.Min(maxTokens, maxTokens / tokenReductionFactor);
             return await conversationManager.InteractWithModelAsync(generateContentPrompt, allocatedTokens, false);
         }
     }
