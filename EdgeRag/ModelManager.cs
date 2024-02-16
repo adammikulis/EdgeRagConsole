@@ -9,14 +9,14 @@ namespace EdgeRag
 {
     public class ModelManager
     {
-        private string directoryPath;
+        private string modelDirectoryPath;
         private const string defaultModelUrl = "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q2_K.gguf"; // Ensures there will always be a model available
         private uint contextSize;
         private int numGpuLayers;
         private uint numCpuThreads;
         private uint seed;
         public string selectedModelPath;
-        public string? currentModelType;
+        public string? selectedModelname;
         public ModelParams? modelParams;
         public LLamaWeights? model;
         public LLamaEmbedder? embedder;
@@ -24,12 +24,11 @@ namespace EdgeRag
 
         public ModelManager(string modelDirectoryPath, uint seed, uint contextSize, int numGpuLayers, uint numCpuThreads)
         {
-            this.directoryPath = modelDirectoryPath;
+            this.modelDirectoryPath = modelDirectoryPath;
             this.contextSize = contextSize;
             this.numGpuLayers = numGpuLayers;
             this.numCpuThreads = numCpuThreads;
             this.seed = seed;
-            selectedModelPath = "";
         }
 
         public static async Task<ModelManager> CreateAsync(string modelDirectoryPath, uint seed, uint contextSize, int numGpuLayers, uint numCpuThreads)
@@ -58,7 +57,7 @@ namespace EdgeRag
             model = LLamaWeights.LoadFromFile(modelParams);
             embedder = new LLamaEmbedder(model, modelParams);
             context = model.CreateContext(modelParams);
-            IOManager.SendMessage($"Model: {currentModelType} from {selectedModelPath} loaded\n");
+            IOManager.SendMessage($"Model: {selectedModelname} from {modelDirectoryPath} loaded\n");
         }
 
         private void CreateModelParams()
@@ -75,19 +74,18 @@ namespace EdgeRag
 
         private async Task<bool> DisplayAndLoadModels(string[] filePaths, bool validModelSelected)
         {
-            IOManager.SendMessage("\n");
+            IOManager.SendMessage($"\nCurrent model directory: {modelDirectoryPath}\nEnter the number of the model you want to load:\n");
             for (int i = 0; i < filePaths.Length; i++)
             {
                 IOManager.SendMessage($"{i + 1}: {Path.GetFileName(filePaths[i])}\n");
             }
 
-            IOManager.SendMessage("\nEnter the number of the model you want to load: ");
             if (int.TryParse(await IOManager.ReadLineAsync(), out int index) && index >= 1 && index <= filePaths.Length)
             {
                 index -= 1;
                 selectedModelPath = filePaths[index];
-                currentModelType = Path.GetFileNameWithoutExtension(selectedModelPath);
-                IOManager.SendMessage($"Model selected: {currentModelType}\n");
+                selectedModelname = Path.GetFileNameWithoutExtension(selectedModelPath);
+                IOManager.SendMessage($"\nModel selected: {selectedModelname}\n");
                 validModelSelected = true;
 
                 // Determine the context size based on the model type
@@ -103,8 +101,8 @@ namespace EdgeRag
 
         private void DetermineMaxContextSize()
         {
-            currentModelType = currentModelType.Split('-')[0].ToLower();
-            switch (currentModelType)
+            selectedModelname = selectedModelname.Split('-')[0].ToLower();
+            switch (selectedModelname)
             {
                 case "phi":
                     contextSize = 2048;
@@ -124,12 +122,12 @@ namespace EdgeRag
                     contextSize = 4096; // Example default
                     break;
             }
-            IOManager.SendMessage($"{currentModelType} detected, context size set to {contextSize}\n");
+            IOManager.SendMessage($"{selectedModelname} detected, context size set to {contextSize}\n");
         }
 
         private async Task<string[]> CheckModelsExist()
         {
-            var filePaths = Directory.GetFiles(directoryPath);
+            var filePaths = Directory.GetFiles(modelDirectoryPath);
             if (filePaths.Length == 0)
             {
                 filePaths = await DownloadDefaultModel(filePaths);
@@ -140,15 +138,15 @@ namespace EdgeRag
 
         private async Task<string[]> DownloadDefaultModel(string[] filePaths)
         {
-            IOManager.SendMessage("\nNo models found in the directory. Attempting to download default model...\n");
+            IOManager.SendMessage($"\nNo models found in the {modelDirectoryPath}. Attempting to download default model...\n");
 
             // Specify the default model to download
             
             // Specify the destination folder, which is the current directoryPath
-            await DownloadManager.DownloadModelAsync(defaultModelUrl, directoryPath);
+            await DownloadManager.DownloadModelAsync(defaultModelUrl, modelDirectoryPath);
 
             // Recheck the directory for models after attempting the download
-            filePaths = Directory.GetFiles(directoryPath);
+            filePaths = Directory.GetFiles(modelDirectoryPath);
             if (filePaths.Length == 0)
             {
                 IOManager.SendMessage("\nFailed to download the default model. Please verify your internet connection and try again.\n");
@@ -160,10 +158,10 @@ namespace EdgeRag
 
         private void CheckDirectoryExists()
         {
-            if (!Directory.Exists(directoryPath))
+            if (!Directory.Exists(modelDirectoryPath))
             {
                 IOManager.SendMessage("The directory does not exist. Creating directory...\n");
-                Directory.CreateDirectory(directoryPath);
+                Directory.CreateDirectory(modelDirectoryPath);
             }
         }
     }

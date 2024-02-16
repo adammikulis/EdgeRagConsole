@@ -30,7 +30,7 @@ namespace EdgeRag
             this.maxTokens = conversationManager.GetMaxTokens();
             this.vectorDatabase = databaseManager.GetVectorDatabase();
             this.questionBatchSize = questionBatchSize;
-            modelType = modelManager.currentModelType;
+            modelType = modelManager.selectedModelname;
             jsonDbPath = databaseManager.dataDirectoryPath;
             json = "";
         }

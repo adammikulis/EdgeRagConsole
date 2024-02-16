@@ -22,7 +22,7 @@ namespace EdgeRag
             this.modelManager = modelManager;
             this.numTopMatches = numTopMatches;
             vectorDatabase = new DataTable();
-            currentModelType = modelManager.currentModelType;
+            currentModelType = modelManager.selectedModelname;
 
             vectorDatabase.Columns.Add("incidentNumber", typeof(long));
             vectorDatabase.Columns.Add("incidentDetails", typeof(string));
@@ -121,7 +121,7 @@ namespace EdgeRag
 
             foreach (DataRow row in vectorDatabase.Rows)
             {
-                var factEmbeddings = (double[])row[modelManager.currentModelType];
+                var factEmbeddings = (double[])row[modelManager.selectedModelname];
                 double score = VectorSearchUtility.CosineSimilarity(queryEmbeddings, factEmbeddings);
                 long incidentNumber = Convert.ToInt64(row["incidentNumber"]);
                 string originalText = row["incidentSolution"].ToString();

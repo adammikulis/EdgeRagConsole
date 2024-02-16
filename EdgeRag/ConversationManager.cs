@@ -51,24 +51,24 @@ namespace EdgeRag
                 }
                 if (maxTokens == 0)
                 {
-                    if (modelManager.currentModelType == "phi")
+                    if (modelManager.selectedModelname == "phi")
                     {
                         maxTokens = 2048;
                     }
-                    else if (modelManager.currentModelType == "llama" || modelManager.currentModelType == "mistral")
+                    else if (modelManager.selectedModelname == "llama" || modelManager.selectedModelname == "mistral")
                     {
                         maxTokens = 4096;
                     }
-                    else if (modelManager.currentModelType == "mixtral")
+                    else if (modelManager.selectedModelname == "mixtral")
                     {
                         maxTokens = 32768;
                     }
-                    else if (modelManager.currentModelType == "codellama")
+                    else if (modelManager.selectedModelname == "codellama")
                     {
                         maxTokens = 65536;
                     }
 
-                    IOManager.SendMessage($"{modelManager.currentModelType} detected, max tokens set to {maxTokens}\n");
+                    IOManager.SendMessage($"{modelManager.selectedModelname} detected, max tokens set to {maxTokens}\n");
                 }
 
 

@@ -1,18 +1,40 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <PublishAot>true</PublishAot>
-    <InvariantGlobalization>true</InvariantGlobalization>
-  </PropertyGroup>
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<PublishAot>true</PublishAot>
+		<InvariantGlobalization>true</InvariantGlobalization>
+		<Configurations>DebugCPU;DebugCUDA12;ReleaseCPU;ReleaseCUDA12</Configurations>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="LLamaSharp" Version="0.10.0" />
-    <PackageReference Include="LLamaSharp.Backend.Cuda12" Version="0.10.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-  </ItemGroup>
+	<PropertyGroup Condition="'$(Configuration)'=='DebugCPU'">
+	  <DefineConstants>RELEASECPU</DefineConstants>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)'=='DebugCUDA12'">
+		<DefineConstants>RELEASECUDA12</DefineConstants>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)'=='ReleaseCPU'">
+		<DefineConstants>RELEASECPU</DefineConstants>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)'=='ReleaseCUDA12'">
+		<DefineConstants>RELEASECUDA12</DefineConstants>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="LLamaSharp" Version="0.10.0" />
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+	</ItemGroup>
+
+	<ItemGroup Condition="'$(Configuration)'=='DebugCPU' or '$(Configuration)'=='ReleaseCPU'">
+		<PackageReference Include="LLamasharp.Backend.Cpu" Version="0.10.0" />
+	</ItemGroup>
+
+	<ItemGroup Condition="'$(Configuration)'=='DebugCUDA12' or '$(Configuration)'=='ReleaseCUDA12'">
+		<PackageReference Include="LLamasharp.Backend.Cuda12" Version="0.10.0" />
+	</ItemGroup>
 
 </Project>

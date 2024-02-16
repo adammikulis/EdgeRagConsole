@@ -1,7 +1,5 @@
-﻿// Note: Only use Mistral models as most testing was done with them
-// Use mistral-7b-instruct-v0.2.Q2_K.gguf for fastest/lowest memory network (at the cost of accuracy)
-// Use mistral-7b-instruct-v0.2.Q4_K_M.gguf for fastest/lowest memory network (at the cost of accuracy)
-// Use mistral-7b-instruct-v0.2.Q8_0.gguf for best quality (slowest, largest memory usage)
+﻿// Install Cuda 12.1 and run ReleaseCUDA12 to use Nvida GPU: https://developer.nvidia.com/cuda-12-1-0-download-archive
+// Note: Only use Mistral models as most testing was done with them (lower q means smaller, fast, less accurate)
 
 using LLama;
 using System;
@@ -34,19 +32,13 @@ namespace EdgeRag
                 Directory.CreateDirectory(dataDirectoryPath);
             }
 
-           
             int numTopMatches = 3; // This is when querying the database of facts
+            string[] systemMessages = { $"" }; // Set this if you would like the LLM to always get a message first
 
-            string[] url = {"https://huggingface.co/TheBloke/phi-2-GGUF/resolve/main/phi-2.Q2_K.gguf",
-                "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q2_K.gguf" };
-            // await DownloadManager.DownloadFileAsync(url[1], modelDirectoryPath);
-
-            string[] systemMessages = { $"" };
-
-            uint seed = 1;
+            uint seed = 0;
             uint contextSize = 0; // Set to 0 to use the maximum allowed for whatever model type you choose
             int maxTokens = 0; // Set to 0 to use the maximum allowed for whatever model type you choose
-            int numGpuLayers = -1; // -1 is all-gpu inference, 0 is cpu-only, set to whatever your VRAM can handle
+            int numGpuLayers = -1; // -1 is all-gpu inference, 0 is cpu-only, 1-33 are increasing levels of gpu usage (set to whatever your VRAM can handle)
             uint numCpuThreads = 8;
             float temperature = 0.5f; // Lower is more deterministic, higher is more random
             string[] antiPrompts = { "<end>" }; // This is what the LLM emits to stop the message

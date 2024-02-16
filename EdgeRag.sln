@@ -3,18 +3,24 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.8.34511.84
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EdgeRag", "EdgeRag\EdgeRag.csproj", "{235993A8-5538-4DEB-871A-5998AAEBC206}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EdgeRag", "EdgeRag\EdgeRag.csproj", "{235993A8-5538-4DEB-871A-5998AAEBC206}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
-		Debug|Any CPU = Debug|Any CPU
-		Release|Any CPU = Release|Any CPU
+		DebugCPU|Any CPU = DebugCPU|Any CPU
+		DebugCUDA12|Any CPU = DebugCUDA12|Any CPU
+		ReleaseCPU|Any CPU = ReleaseCPU|Any CPU
+		ReleaseCUDA12|Any CPU = ReleaseCUDA12|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{235993A8-5538-4DEB-871A-5998AAEBC206}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{235993A8-5538-4DEB-871A-5998AAEBC206}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{235993A8-5538-4DEB-871A-5998AAEBC206}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{235993A8-5538-4DEB-871A-5998AAEBC206}.Release|Any CPU.Build.0 = Release|Any CPU
+		{235993A8-5538-4DEB-871A-5998AAEBC206}.DebugCPU|Any CPU.ActiveCfg = DebugCPU|Any CPU
+		{235993A8-5538-4DEB-871A-5998AAEBC206}.DebugCPU|Any CPU.Build.0 = DebugCPU|Any CPU
+		{235993A8-5538-4DEB-871A-5998AAEBC206}.DebugCUDA12|Any CPU.ActiveCfg = DebugCUDA12|Any CPU
+		{235993A8-5538-4DEB-871A-5998AAEBC206}.DebugCUDA12|Any CPU.Build.0 = DebugCUDA12|Any CPU
+		{235993A8-5538-4DEB-871A-5998AAEBC206}.ReleaseCPU|Any CPU.ActiveCfg = ReleaseCPU|Any CPU
+		{235993A8-5538-4DEB-871A-5998AAEBC206}.ReleaseCPU|Any CPU.Build.0 = ReleaseCPU|Any CPU
+		{235993A8-5538-4DEB-871A-5998AAEBC206}.ReleaseCUDA12|Any CPU.ActiveCfg = ReleaseCUDA12|Any CPU
+		{235993A8-5538-4DEB-871A-5998AAEBC206}.ReleaseCUDA12|Any CPU.Build.0 = ReleaseCUDA12|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
