@@ -1,4 +1,5 @@
-﻿using LLama;
+﻿using System.Data;
+using LLama;
 using LLama.Common;
 
 namespace EdgeRag
@@ -8,6 +9,7 @@ namespace EdgeRag
         
         private ModelManager modelManager;
         private DatabaseManager databaseManager;
+        private DataTable vectorDatabase;
         private string[] systemMessages;
         private string selectedModelType;
         private int systemMessageNumber;
@@ -15,6 +17,7 @@ namespace EdgeRag
 
         private float temperature;
         private int maxTokens;
+        private int numTopMatches;
         
 
         public InteractiveExecutor? executor;
@@ -22,22 +25,24 @@ namespace EdgeRag
 
         public event Action<string> OnMessage = delegate { };
 
-        public ConversationManager(ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, string[] systemMessages, string[] antiPrompts)
+        public ConversationManager(ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, string[] systemMessages, string[] antiPrompts, int numTopMatches)
         {
             this.databaseManager = databaseManager;
+            this.vectorDatabase = databaseManager.GetVectorDatabase();
             this.modelManager = modelManager;
             this.maxTokens = maxTokens;
             this.antiPrompts = antiPrompts;
             this.systemMessages = systemMessages;
             this.databaseManager = databaseManager;
             this.selectedModelType = modelManager.selectedModelType;
+            this.numTopMatches = numTopMatches;
             systemMessageNumber = 0;
 
         }
 
-        public static async Task<ConversationManager> CreateAsync(ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, string[] systemMessages, string[] antiPrompts)
+        public static async Task<ConversationManager> CreateAsync(ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, string[] systemMessages, string[] antiPrompts, int numTopMatches)
         {
-            var conversationManager = new ConversationManager(modelManager, databaseManager, maxTokens, systemMessages, antiPrompts);
+            var conversationManager = new ConversationManager(modelManager, databaseManager, maxTokens, systemMessages, antiPrompts, numTopMatches);
             await conversationManager.InitializeAsync();
             return conversationManager;
         }
@@ -97,7 +102,7 @@ namespace EdgeRag
 
                 if (useDatabaseForChat)
                 {
-                    var withDatabaseResponse = await databaseManager.QueryDatabase(userInput);
+                    var withDatabaseResponse = await QueryDatabase(userInput);
                     IOManager.DisplayGraphicalScores(withDatabaseResponse.incidentNumbers, withDatabaseResponse.scores);
                     string response = await InteractWithModelAsync(withDatabaseResponse.summarizedText, maxTokens, temperature, false);
                     IOManager.SendMessage(response + "\n");
@@ -140,6 +145,40 @@ namespace EdgeRag
                 prompt += text;
             }
             return prompt;
+        }
+
+        public async Task<(string summarizedText, long[] incidentNumbers, double[] scores)> QueryDatabase(string prompt)
+        {
+            // Check if the DataTable is empty
+            if (vectorDatabase.Rows.Count == 0)
+            {
+                return (prompt, new long[0], new double[0]);
+            }
+
+            var queryEmbeddings = await databaseManager.GenerateEmbeddingsAsync(prompt);
+            List<Tuple<double, long, string>> scoresIncidents = new List<Tuple<double, long, string>>();
+
+            foreach (DataRow row in vectorDatabase.Rows)
+            {
+                var factEmbeddings = (double[])row[modelManager.selectedModelType];
+                double score = VectorSearchUtility.CosineSimilarity(queryEmbeddings, factEmbeddings);
+                long incidentNumber = Convert.ToInt64(row["incidentNumber"]);
+                string originalText = row["incidentSolution"].ToString();
+                scoresIncidents.Add(new Tuple<double, long, string>(score, incidentNumber, originalText));
+            }
+
+            // If no matches were found, return early with empty arrays
+            if (scoresIncidents.Count == 0)
+            {
+                return (prompt, new long[0], new double[0]);
+            }
+
+            var topMatches = scoresIncidents.OrderByDescending(s => s.Item1).Take(numTopMatches).ToList();
+            long[] incidentNumbers = topMatches.Select(m => m.Item2).ToArray();
+            double[] scores = topMatches.Select(m => m.Item1).ToArray();
+
+            prompt = topMatches.Count > 0 ? $"{topMatches[0].Item3} " : "";
+            return (prompt, incidentNumbers, scores);
         }
 
         public ChatSession? GetSession()

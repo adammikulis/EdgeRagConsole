@@ -16,7 +16,7 @@ namespace EdgeRag
         public string[] databaseTypes;
         private List<(string Name, Type DataType)> techSupportColumns;
 
-        public DatabaseManager(ModelManager modelManager, string dataDirectoryPath, int numTopMatches)
+        public DatabaseManager(ModelManager modelManager, string dataDirectoryPath)
         {
             this.dataDirectoryPath = dataDirectoryPath;
             this.modelManager = modelManager;
@@ -27,9 +27,9 @@ namespace EdgeRag
 
         }
 
-        public static async Task<DatabaseManager> CreateAsync(ModelManager modelManager, string dataDirectoryPath, int numTopMatches)
+        public static async Task<DatabaseManager> CreateAsync(ModelManager modelManager, string dataDirectoryPath)
         {
-            var databaseManager = new DatabaseManager(modelManager, dataDirectoryPath, numTopMatches);
+            var databaseManager = new DatabaseManager(modelManager, dataDirectoryPath);
             await databaseManager.InitializeAsync();
             return databaseManager;
         }
@@ -71,22 +71,17 @@ namespace EdgeRag
                 }
             }
         }
-
-
         private async Task CreateNewDatabase()
         {
             IOManager.SendMessage("Please enter a name for the new database file (without extension): ");
             dataFileName = await IOManager.ReadLineAsync();
             dataFileName = $"{dataFileName}.json";
-            // Basic validation for custom file name
+            
             if (string.IsNullOrEmpty(dataFileName) || dataFileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
             {
                 IOManager.SendMessage("Invalid file name. Returning to the previous menu.");
                 return;
             }
-
-            // Define the available database types
-            
 
             IOManager.SendMessage("\nPlease select the type of database you want to create:\n");
             for (int i = 0; i < databaseTypes.Length; i++)
@@ -149,8 +144,6 @@ namespace EdgeRag
             });
         }
 
-        
-
         // LLamaEmbedder generates floats which need to be converted to double due to JSON behavior
         public async Task<double[]> GenerateEmbeddingsAsync(string textToEmbed)
         {
@@ -159,39 +152,6 @@ namespace EdgeRag
             return embeddingsDouble;
         }
 
-        public async Task<(string summarizedText, long[] incidentNumbers, double[] scores)> QueryDatabase(string prompt)
-        {
-            // Check if the DataTable is empty
-            if (vectorDatabase.Rows.Count == 0)
-            {
-                return (prompt, new long[0], new double[0]);
-            }
-
-            var queryEmbeddings = await GenerateEmbeddingsAsync(prompt);
-            List<Tuple<double, long, string>> scoresIncidents = new List<Tuple<double, long, string>>();
-
-            foreach (DataRow row in vectorDatabase.Rows)
-            {
-                var factEmbeddings = (double[])row[modelManager.selectedModelType];
-                double score = VectorSearchUtility.CosineSimilarity(queryEmbeddings, factEmbeddings);
-                long incidentNumber = Convert.ToInt64(row["incidentNumber"]);
-                string originalText = row["incidentSolution"].ToString();
-                scoresIncidents.Add(new Tuple<double, long, string>(score, incidentNumber, originalText));
-            }
-
-            // If no matches were found, return early with empty arrays
-            if (scoresIncidents.Count == 0)
-            {
-                return (prompt, new long[0], new double[0]);
-            }
-
-            var topMatches = scoresIncidents.OrderByDescending(s => s.Item1).Take(numTopMatches).ToList();
-            long[] incidentNumbers = topMatches.Select(m => m.Item2).ToArray();
-            double[] scores = topMatches.Select(m => m.Item1).ToArray();
-
-            prompt = topMatches.Count > 0 ? $"{topMatches[0].Item3} " : "";
-            return (prompt, incidentNumbers, scores);
-        }
 
         public string DataTableToJson(DataTable dataTable)
         {
