@@ -1,6 +1,7 @@
-﻿// Note: All data has been generated/tested with mistral-7b-instruct-v0.2.Q8_0.gguf for consistency
-// Use mistral-7b-instruct-v0.2.Q8_0.gguf for best results
+﻿// Note: Only use Mistral models as most testing was done with them
 // Use mistral-7b-instruct-v0.2.Q2_K.gguf for fastest/lowest memory network (at the cost of accuracy)
+// Use mistral-7b-instruct-v0.2.Q4_K_M.gguf for fastest/lowest memory network (at the cost of accuracy)
+// Use mistral-7b-instruct-v0.2.Q8_0.gguf for best quality (slowest, largest memory usage)
 
 using LLama;
 using System;
@@ -28,8 +29,12 @@ namespace EdgeRag
             {
                 Directory.CreateDirectory(modelDirectoryPath);
             }
+            if (!Directory.Exists(dataDirectoryPath)) 
+            { 
+                Directory.CreateDirectory(dataDirectoryPath);
+            }
 
-
+           
             int numTopMatches = 3; // This is when querying the database of facts
 
             string[] url = {"https://huggingface.co/TheBloke/phi-2-GGUF/resolve/main/phi-2.Q2_K.gguf",

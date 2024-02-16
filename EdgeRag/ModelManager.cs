@@ -10,12 +10,13 @@ namespace EdgeRag
     public class ModelManager
     {
         private string directoryPath;
+        private const string defaultModelUrl = "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q2_K.gguf"; // Ensures there will always be a model available
         private uint contextSize;
         private int numGpuLayers;
         private uint numCpuThreads;
         private uint seed;
-        public string SelectedModelPath;
-        public string? modelType;
+        public string selectedModelPath;
+        public string? currentModelType;
         public ModelParams? modelParams;
         public LLamaWeights? model;
         public LLamaEmbedder? embedder;
@@ -28,7 +29,7 @@ namespace EdgeRag
             this.numGpuLayers = numGpuLayers;
             this.numCpuThreads = numCpuThreads;
             this.seed = seed;
-            SelectedModelPath = "";
+            selectedModelPath = "";
         }
 
         public static async Task<ModelManager> CreateAsync(string modelDirectoryPath, uint seed, uint contextSize, int numGpuLayers, uint numCpuThreads)
@@ -40,68 +41,29 @@ namespace EdgeRag
 
         public async Task InitializeAsync()
         {
-            
-            if (!Directory.Exists(directoryPath))
-            {
-                IOManager.SendMessage("The directory does not exist.");
-                Environment.Exit(0);
-            }
-
-            var filePaths = Directory.GetFiles(directoryPath);
-            if (filePaths.Length == 0)
-            {
-                IOManager.SendMessage("No models found in the directory");
-                Environment.Exit(0);
-            }
+            CheckDirectoryExists();
+            string[] filePaths = await CheckModelsExist();
 
             bool validModelSelected = false;
             while (!validModelSelected)
             {
-                for (int i = 0; i < filePaths.Length; i++)
-                {
-                    IOManager.SendMessage($"{i + 1}: {Path.GetFileName(filePaths[i])}\n");
-                }
-
-                IOManager.SendMessage("\nEnter the number of the model you want to load: ");
-                if (int.TryParse(await IOManager.ReadLineAsync(), out int index) && index >= 1 && index <= filePaths.Length)
-                {
-                    index -= 1;
-                    SelectedModelPath = filePaths[index];
-                    modelType = Path.GetFileNameWithoutExtension(SelectedModelPath);
-                    IOManager.SendMessage($"Model selected: {modelType}");
-                    validModelSelected = true;
-
-                    modelType = modelType.Split('-')[0].ToLower();
-
-                    if (contextSize == 0)
-                    {
-                        if (modelType == "phi")
-                        {
-                            contextSize = 2048;
-                        }
-                        else if (modelType == "llama" || modelType == "mistral")
-                        {
-                            contextSize = 4096;
-                        }
-                        else if (modelType == "mixtral")
-                        {
-                            contextSize = 32768;
-                        }
-                        else if (modelType == "codellama")
-                        {
-                            contextSize = 65536;
-                        }
-                        IOManager.SendMessage($"{modelType} detected, context size set to {contextSize}");
-                    }
-                }
-                else
-                {
-                    IOManager.SendMessage("Invalid input, please enter a number corresponding to the model list.\n");
-                }
+                validModelSelected = await DisplayAndLoadModels(filePaths, validModelSelected);
             }
+            CreateModelParams();
+            LoadModelEmbedderContext();
+        }
 
-                
-            modelParams = new ModelParams(SelectedModelPath)
+        private void LoadModelEmbedderContext()
+        {
+            model = LLamaWeights.LoadFromFile(modelParams);
+            embedder = new LLamaEmbedder(model, modelParams);
+            context = model.CreateContext(modelParams);
+            IOManager.SendMessage($"Model: {currentModelType} from {selectedModelPath} loaded\n");
+        }
+
+        private void CreateModelParams()
+        {
+            modelParams = new ModelParams(selectedModelPath)
             {
                 Seed = seed,
                 ContextSize = contextSize,
@@ -109,11 +71,100 @@ namespace EdgeRag
                 GpuLayerCount = numGpuLayers,
                 Threads = numCpuThreads
             };
+        }
 
-            model = LLamaWeights.LoadFromFile(modelParams);
-            embedder = new LLamaEmbedder(model, modelParams);
-            context = model.CreateContext(modelParams);
-            IOManager.SendMessage($"\nModel: {modelType} from {SelectedModelPath}loaded\n");
+        private async Task<bool> DisplayAndLoadModels(string[] filePaths, bool validModelSelected)
+        {
+            IOManager.SendMessage("\n");
+            for (int i = 0; i < filePaths.Length; i++)
+            {
+                IOManager.SendMessage($"{i + 1}: {Path.GetFileName(filePaths[i])}\n");
+            }
+
+            IOManager.SendMessage("\nEnter the number of the model you want to load: ");
+            if (int.TryParse(await IOManager.ReadLineAsync(), out int index) && index >= 1 && index <= filePaths.Length)
+            {
+                index -= 1;
+                selectedModelPath = filePaths[index];
+                currentModelType = Path.GetFileNameWithoutExtension(selectedModelPath);
+                IOManager.SendMessage($"Model selected: {currentModelType}\n");
+                validModelSelected = true;
+
+                // Determine the context size based on the model type
+                DetermineMaxContextSize();
+            }
+            else
+            {
+                IOManager.SendMessage("\nInvalid input, please enter a number corresponding to the model list.\n");
+            }
+
+            return validModelSelected;
+        }
+
+        private void DetermineMaxContextSize()
+        {
+            currentModelType = currentModelType.Split('-')[0].ToLower();
+            switch (currentModelType)
+            {
+                case "phi":
+                    contextSize = 2048;
+                    break;
+                case "llama":
+                case "mistral":
+                    contextSize = 4096;
+                    break;
+                case "mixtral":
+                    contextSize = 32768;
+                    break;
+                case "codellama":
+                    contextSize = 65536;
+                    break;
+                default:
+                    // Set a default context size or handle unknown model type
+                    contextSize = 4096; // Example default
+                    break;
+            }
+            IOManager.SendMessage($"{currentModelType} detected, context size set to {contextSize}\n");
+        }
+
+        private async Task<string[]> CheckModelsExist()
+        {
+            var filePaths = Directory.GetFiles(directoryPath);
+            if (filePaths.Length == 0)
+            {
+                filePaths = await DownloadDefaultModel(filePaths);
+            }
+
+            return filePaths;
+        }
+
+        private async Task<string[]> DownloadDefaultModel(string[] filePaths)
+        {
+            IOManager.SendMessage("\nNo models found in the directory. Attempting to download default model...\n");
+
+            // Specify the default model to download
+            
+            // Specify the destination folder, which is the current directoryPath
+            await DownloadManager.DownloadModelAsync(defaultModelUrl, directoryPath);
+
+            // Recheck the directory for models after attempting the download
+            filePaths = Directory.GetFiles(directoryPath);
+            if (filePaths.Length == 0)
+            {
+                IOManager.SendMessage("\nFailed to download the default model. Please verify your internet connection and try again.\n");
+                Environment.Exit(0);
+            }
+
+            return filePaths;
+        }
+
+        private void CheckDirectoryExists()
+        {
+            if (!Directory.Exists(directoryPath))
+            {
+                IOManager.SendMessage("The directory does not exist. Creating directory...\n");
+                Directory.CreateDirectory(directoryPath);
+            }
         }
     }
 }

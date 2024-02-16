@@ -30,7 +30,7 @@ namespace EdgeRag
             this.maxTokens = conversationManager.GetMaxTokens();
             this.vectorDatabase = databaseManager.GetVectorDatabase();
             this.questionBatchSize = questionBatchSize;
-            modelType = modelManager.modelType;
+            modelType = modelManager.currentModelType;
             jsonDbPath = databaseManager.dataDirectoryPath;
             json = "";
         }
@@ -44,9 +44,9 @@ namespace EdgeRag
 
         public async Task InitializeAsync()
         {
-            await Task.Run(() =>
+            await Task.Run(async () =>
             {
-                currentIncidentNumber = databaseManager.highestIncidentNumber;
+                
 
                 // Update vectorDatabase with missing columns based on loaded JSON data
                 string filePath = Path.Combine(jsonDbPath, databaseManager.dataFileName);
@@ -67,6 +67,7 @@ namespace EdgeRag
             });
         }
 
+
         private string SelectRandomTheme()
         {
             string[] themes = { "a specific Apple device", "a specific Android device", "a specific Windows device", "a specific printer or copier", "a specific networking device", "a specific piece of software", "a specific piece of tech hardware" };
@@ -76,6 +77,7 @@ namespace EdgeRag
 
         public async Task GenerateITDataPipeline(int numQuestions)
         {
+            currentIncidentNumber = await databaseManager.GetHighestIncidentNumberAsync();
             // Sets a minimum of 1 for questionBatchSize
             questionBatchSize = Math.Max(1, questionBatchSize);
 
@@ -107,12 +109,6 @@ namespace EdgeRag
                 newRow["incidentDetails"] = incidentDetails;
                 newRow["supportResponse"] = supportResponse;
                 newRow["incidentSolution"] = incidentSolution;
-
-                // Ensure the model name column exists and add it if necessary
-                if (!vectorDatabase.Columns.Contains(modelType))
-                {
-                    vectorDatabase.Columns.Add(modelType, typeof(double[]));
-                }
 
                 // Generate embeddings for the incidentDetails
                 double[] embeddings = await databaseManager.GenerateEmbeddingsAsync(incidentDetails);

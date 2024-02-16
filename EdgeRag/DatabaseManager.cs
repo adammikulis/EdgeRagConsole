@@ -10,11 +10,10 @@ namespace EdgeRag
     {
         private DataTable vectorDatabase;
         private ModelManager modelManager;
+        string currentModelType;
         private int numTopMatches;
         public string dataDirectoryPath;
         public string dataFileName;
-        public string summarizedText;
-        public long highestIncidentNumber;
 
         public DatabaseManager(ModelManager modelManager, string dataDirectoryPath, string dataFileName, int numTopMatches)
         {
@@ -23,18 +22,17 @@ namespace EdgeRag
             this.modelManager = modelManager;
             this.numTopMatches = numTopMatches;
             vectorDatabase = new DataTable();
-            summarizedText = "";
+            currentModelType = modelManager.currentModelType;
 
-            // Add the fixed columns to the DataTable
             vectorDatabase.Columns.Add("incidentNumber", typeof(long));
             vectorDatabase.Columns.Add("incidentDetails", typeof(string));
             vectorDatabase.Columns.Add("supportResponse", typeof(string));
             vectorDatabase.Columns.Add("incidentSolution", typeof(string));
-            vectorDatabase.Columns.Add("codellama", typeof(double[]));
-            vectorDatabase.Columns.Add("llama", typeof(double[]));
-            vectorDatabase.Columns.Add("mistral", typeof(double[]));
-            vectorDatabase.Columns.Add("mixtral", typeof(double[]));
-            vectorDatabase.Columns.Add("phi", typeof(double[]));
+            // vectorDatabase.Columns.Add("codellama", typeof(double[]));
+            // vectorDatabase.Columns.Add("llama", typeof(double[]));
+            vectorDatabase.Columns.Add("mistral", typeof(double[])); // Only Mistral is tested/supported right now for EdgeRag
+            // vectorDatabase.Columns.Add("mixtral", typeof(double[]));
+            // vectorDatabase.Columns.Add("phi", typeof(double[]));
         }
 
         public static async Task<DatabaseManager> CreateAsync(ModelManager modelManager, string dataDirectoryPath, string dataFileName, int numTopMatches)
@@ -66,22 +64,29 @@ namespace EdgeRag
                                 vectorDatabase.ImportRow(row);
                             }
 
-                            await GenerateMissingEmbeddingsAsync();
-                            highestIncidentNumber = existingTable.AsEnumerable().Max(row => Convert.ToInt64(row["incidentNumber"]));
+                            // await GenerateMissingEmbeddingsAsync();
                         }
                     }
                 }
             });
         }
 
+        public async Task<long> GetHighestIncidentNumberAsync()
+        {
+            return await Task.Run(() =>
+            {
+                if (vectorDatabase == null || vectorDatabase.Rows.Count == 0) { return 0; }
+                return vectorDatabase.AsEnumerable().Max(row => Convert.ToInt64(row["incidentNumber"]));
+            });
+        }
+
+        // Not needed until I implement additional model familiesl like llama or phi
         private async Task GenerateMissingEmbeddingsAsync()
         {
             // Generate missing embeddings for the current model type
-            string currentModelType = modelManager.modelType;
             foreach (DataRow row in vectorDatabase.Rows)
             {
-                var embeddings = row[currentModelType] as double[];
-                if (embeddings == null || embeddings.Length == 0)
+                if (row[currentModelType] == null)
                 {
                     // Generate embeddings based on incidentDetails
                     IOManager.SendMessage($"Generating missing embeddings for {row["incidentNumber"]}...");
@@ -91,11 +96,11 @@ namespace EdgeRag
                 }
             }
 
-            // Serialize the DataTable to JSON with correct embedding data
             string json = DataTableToJson(vectorDatabase);
             SaveJsonToFile(json);
         }
 
+        // LLamaEmbedder generates floats which need to be converted to double due to JSON behavior
         public async Task<double[]> GenerateEmbeddingsAsync(string textToEmbed)
         {
             float[] embeddingsFloat = await modelManager.embedder.GetEmbeddings(textToEmbed);
@@ -103,21 +108,20 @@ namespace EdgeRag
             return embeddingsDouble;
         }
 
-        public async Task<(string summarizedText, long[] incidentNumbers, double[] scores)> QueryDatabase(string query)
+        public async Task<(string summarizedText, long[] incidentNumbers, double[] scores)> QueryDatabase(string prompt)
         {
-            summarizedText = "";
             // Check if the DataTable is empty
             if (vectorDatabase.Rows.Count == 0)
             {
-                return (summarizedText, new long[0], new double[0]);
+                return (prompt, new long[0], new double[0]);
             }
 
-            var queryEmbeddings = await GenerateEmbeddingsAsync(query);
+            var queryEmbeddings = await GenerateEmbeddingsAsync(prompt);
             List<Tuple<double, long, string>> scoresIncidents = new List<Tuple<double, long, string>>();
 
             foreach (DataRow row in vectorDatabase.Rows)
             {
-                var factEmbeddings = (double[])row[modelManager.modelType];
+                var factEmbeddings = (double[])row[modelManager.currentModelType];
                 double score = VectorSearchUtility.CosineSimilarity(queryEmbeddings, factEmbeddings);
                 long incidentNumber = Convert.ToInt64(row["incidentNumber"]);
                 string originalText = row["incidentSolution"].ToString();
@@ -127,43 +131,21 @@ namespace EdgeRag
             // If no matches were found, return early with empty arrays
             if (scoresIncidents.Count == 0)
             {
-                return (summarizedText, new long[0], new double[0]);
+                return (prompt, new long[0], new double[0]);
             }
 
             var topMatches = scoresIncidents.OrderByDescending(s => s.Item1).Take(numTopMatches).ToList();
             long[] incidentNumbers = topMatches.Select(m => m.Item2).ToArray();
             double[] scores = topMatches.Select(m => m.Item1).ToArray();
 
-            summarizedText = topMatches.Count > 0 ? $"{topMatches[0].Item3} " : "";
-            return (summarizedText, incidentNumbers, scores);
+            prompt = topMatches.Count > 0 ? $"{topMatches[0].Item3} " : "";
+            return (prompt, incidentNumbers, scores);
         }
 
         public string DataTableToJson(DataTable dataTable)
         {
-            List<Dictionary<string, object>> rows = new List<Dictionary<string, object>>();
-            foreach (DataRow row in dataTable.Rows)
-            {
-                Dictionary<string, object> dictRow = new Dictionary<string, object>();
-                foreach (DataColumn column in dataTable.Columns)
-                {
-                    if (row[column] is double[])
-                    {
-                        // Explicitly serialize double[] as a JSON array
-                        double[] embeddings = (double[])row[column];
-                        string jsonArray = JsonConvert.SerializeObject(embeddings);
-                        dictRow[column.ColumnName] = JsonConvert.DeserializeObject(jsonArray);
-                    }
-                    else
-                    {
-                        dictRow[column.ColumnName] = row[column];
-                    }
-                }
-                rows.Add(dictRow);
-            }
-            return JsonConvert.SerializeObject(rows, Formatting.Indented);
+            return JsonConvert.SerializeObject(dataTable, Formatting.Indented);
         }
-
-
 
         public DataTable JsonToDataTable(string json)
         {

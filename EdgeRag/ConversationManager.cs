@@ -46,29 +46,29 @@ namespace EdgeRag
             {
                 if (modelManager.model == null || modelManager.modelParams == null)
                 {
-                    OnMessage?.Invoke("Model or modelParams is null. Cannot initialize conversation.");
+                    OnMessage?.Invoke("Model or modelParams is null. Cannot initialize conversation.\n");
                     return;
                 }
                 if (maxTokens == 0)
                 {
-                    if (modelManager.modelType == "phi")
+                    if (modelManager.currentModelType == "phi")
                     {
                         maxTokens = 2048;
                     }
-                    else if (modelManager.modelType == "llama" || modelManager.modelType == "mistral")
+                    else if (modelManager.currentModelType == "llama" || modelManager.currentModelType == "mistral")
                     {
                         maxTokens = 4096;
                     }
-                    else if (modelManager.modelType == "mixtral")
+                    else if (modelManager.currentModelType == "mixtral")
                     {
                         maxTokens = 32768;
                     }
-                    else if (modelManager.modelType == "codellama")
+                    else if (modelManager.currentModelType == "codellama")
                     {
                         maxTokens = 65536;
                     }
 
-                    IOManager.SendMessage($"{modelManager.modelType} detected, max tokens set to {maxTokens}");
+                    IOManager.SendMessage($"{modelManager.currentModelType} detected, max tokens set to {maxTokens}\n");
                 }
 
 
