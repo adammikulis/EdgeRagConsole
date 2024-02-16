@@ -1,46 +1,27 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
-using static LLama.Common.ChatHistory;
 
 namespace EdgeRag
 {
     public class IOManager
     {
+        private const int maxStars = 50;
 
-        int maxStars;
-        public event Action<string> OnOutputMessage;
+        public static event Action<string> OnOutputMessage;
 
-        public IOManager(int maxStars)
+        // Private constructor to prevent instantiation from outside the class
+        private IOManager()
         {
-            this.maxStars = maxStars;
         }
 
-        public static async Task<IOManager> CreateAsync(int maxStars)
-        {
-            var iOManager = new IOManager(maxStars);
-            await iOManager.InitializeAsync();
-            return iOManager;
-        }
-
-        public async Task InitializeAsync()
-        {
-            await Task.Run(() =>
-            {
-                SendMessage("IO Manager initialized!");
-            });
-        }
-
-        public void SendMessage(string message)
+        public static void SendMessage(string message)
         {
             OnOutputMessage?.Invoke(message);
         }
 
-        public void DisplayGraphicalScores(long[] incidentNumbers, double[] scores)
+        public static void DisplayGraphicalScores(long[] incidentNumbers, double[] scores)
         {
-            SendMessage($"Most similar tickets:\n");
+            SendMessage("Most similar tickets:\n");
             for (int i = 0; i < incidentNumbers.Length && i < 3; i++)
             {
                 long incidentNumber = incidentNumbers[i];
@@ -52,12 +33,12 @@ namespace EdgeRag
             }
         }
 
-        public async Task<string> ReadLineAsync()
+        public static async Task<string> ReadLineAsync()
         {
             return await Task.Run(() => Console.ReadLine());
         }
 
-        public async Task RunMenuAsync(Func<Task> chat, Func<Task> chatUsingDatabase, Func<int, Task> generateQuestionsAndChat, Func<int, Task> generateQuestions, Action quit)
+        public static async Task RunMenuAsync(Func<Task> chat, Func<Task> chatUsingDatabase, Func<int, Task> generateQuestionsAndChat, Func<int, Task> generateQuestions, Action quit)
         {
             while (true)
             {

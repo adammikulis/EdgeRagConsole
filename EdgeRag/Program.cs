@@ -22,7 +22,7 @@ namespace EdgeRag
             uint seed = 1;
             uint contextSize = 0; // Set to 0 to use the maximum allowed for whatever model type you choose
             int maxTokens = 0; // Set to 0 to use the maximum allowed for whatever model type you choose
-            int numGpuLayers = 33; // Adjust based on VRAM capability
+            int numGpuLayers = -1; // -1 is all-gpu inference, 0 is cpu-only
             uint numCpuThreads = 8;
             float temperature = 0.5f; // Lower is more deterministic, higher is more random
             string[] antiPrompts = { "<end>" }; // This is what the LLM emits to stop the message
@@ -30,11 +30,10 @@ namespace EdgeRag
             int questionBatchSize = 32;
             int numStars = 50; // This is for rendering
 
-
             var pipelineManager = await PipelineManager.CreateAsync(modelDirectoryPath, databaseJsonPath, numTopMatches, seed, contextSize, maxTokens, numGpuLayers, numCpuThreads, temperature, systemMessages, antiPrompts, questionBatchSize, numStars);
 
             // Menu loop
-            await pipelineManager.iOManager.RunMenuAsync(
+            await IOManager.RunMenuAsync(
             chat: () => pipelineManager.conversationManager.StartChatAsync(false),
             chatUsingDatabase: () => pipelineManager.conversationManager.StartChatAsync(true),
             generateQuestionsAndChat: async (numQuestions) => {

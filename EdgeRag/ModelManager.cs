@@ -9,7 +9,6 @@ namespace EdgeRag
 {
     public class ModelManager
     {
-        IOManager iOManager;
         private string directoryPath;
         private uint contextSize;
         private int numGpuLayers;
@@ -23,9 +22,8 @@ namespace EdgeRag
         public LLamaEmbedder? embedder;
         public LLamaContext? context;
 
-        public ModelManager(IOManager iOManager, string modelDirectoryPath, uint seed, uint contextSize, int numGpuLayers, uint numCpuThreads)
+        public ModelManager(string modelDirectoryPath, uint seed, uint contextSize, int numGpuLayers, uint numCpuThreads)
         {
-            this.iOManager = iOManager;
             this.directoryPath = modelDirectoryPath;
             this.contextSize = contextSize;
             this.numGpuLayers = numGpuLayers;
@@ -34,9 +32,9 @@ namespace EdgeRag
             SelectedModelPath = "";
         }
 
-        public static async Task<ModelManager> CreateAsync(IOManager iOManager, string modelDirectoryPath, uint seed, uint contextSize, int numGpuLayers, uint numCpuThreads)
+        public static async Task<ModelManager> CreateAsync(string modelDirectoryPath, uint seed, uint contextSize, int numGpuLayers, uint numCpuThreads)
         {
-            var modelManager = new ModelManager(iOManager, modelDirectoryPath, seed, contextSize, numGpuLayers, numCpuThreads);
+            var modelManager = new ModelManager(modelDirectoryPath, seed, contextSize, numGpuLayers, numCpuThreads);
             await modelManager.InitializeAsync();
             return modelManager;
         }
@@ -46,14 +44,14 @@ namespace EdgeRag
             
             if (!Directory.Exists(directoryPath))
             {
-                iOManager.SendMessage("The directory does not exist.");
+                IOManager.SendMessage("The directory does not exist.");
                 Environment.Exit(0);
             }
 
             var filePaths = Directory.GetFiles(directoryPath);
             if (filePaths.Length == 0)
             {
-                iOManager.SendMessage("No models found in the directory");
+                IOManager.SendMessage("No models found in the directory");
                 Environment.Exit(0);
             }
 
@@ -62,16 +60,16 @@ namespace EdgeRag
             {
                 for (int i = 0; i < filePaths.Length; i++)
                 {
-                    iOManager.SendMessage($"{i + 1}: {Path.GetFileName(filePaths[i])}");
+                    IOManager.SendMessage($"{i + 1}: {Path.GetFileName(filePaths[i])}");
                 }
 
-                iOManager.SendMessage("\nEnter the number of the model you want to load: ");
-                if (int.TryParse(await iOManager.ReadLineAsync(), out int index) && index >= 1 && index <= filePaths.Length)
+                IOManager.SendMessage("\nEnter the number of the model you want to load: ");
+                if (int.TryParse(await IOManager.ReadLineAsync(), out int index) && index >= 1 && index <= filePaths.Length)
                 {
                     index -= 1;
                     SelectedModelPath = filePaths[index];
                     modelName = Path.GetFileNameWithoutExtension(SelectedModelPath);
-                    iOManager.SendMessage($"Model selected: {modelName}");
+                    IOManager.SendMessage($"Model selected: {modelName}");
                     validModelSelected = true;
 
                     modelType = modelName.Split('-')[0].ToLower();
@@ -94,12 +92,12 @@ namespace EdgeRag
                         {
                             contextSize = 65536;
                         }
-                        iOManager.SendMessage($"{modelType} detected, context size set to {contextSize}");
+                        IOManager.SendMessage($"{modelType} detected, context size set to {contextSize}");
                     }
                 }
                 else
                 {
-                    iOManager.SendMessage("Invalid input, please enter a number corresponding to the model list.\n");
+                    IOManager.SendMessage("Invalid input, please enter a number corresponding to the model list.\n");
                 }
             }
 
@@ -116,7 +114,7 @@ namespace EdgeRag
             model = LLamaWeights.LoadFromFile(modelParams);
             embedder = new LLamaEmbedder(model, modelParams);
             context = model.CreateContext(modelParams);
-            iOManager.SendMessage($"\nModel: {modelName} from {SelectedModelPath}loaded\n");
+            IOManager.SendMessage($"\nModel: {modelName} from {SelectedModelPath}loaded\n");
         }
     }
 }

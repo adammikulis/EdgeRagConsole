@@ -5,7 +5,7 @@ namespace EdgeRag
 {
     public class ConversationManager
     {
-        private IOManager iOManager;
+        
         private ModelManager modelManager;
         private DatabaseManager databaseManager;
         private string[] systemMessages;
@@ -22,9 +22,8 @@ namespace EdgeRag
 
         public event Action<string> OnMessage = delegate { };
 
-        public ConversationManager(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts)
+        public ConversationManager(ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts)
         {
-            this.iOManager = iOManager;
             this.databaseManager = databaseManager;
             this.modelManager = modelManager;
             this.maxTokens = maxTokens;
@@ -37,9 +36,9 @@ namespace EdgeRag
 
         }
 
-        public static async Task<ConversationManager> CreateAsync(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts)
+        public static async Task<ConversationManager> CreateAsync(ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts)
         {
-            var conversationManager = new ConversationManager(iOManager, modelManager, databaseManager, maxTokens, temperature, systemMessages, antiPrompts);
+            var conversationManager = new ConversationManager(modelManager, databaseManager, maxTokens, temperature, systemMessages, antiPrompts);
             await conversationManager.InitializeAsync();
             return conversationManager;
         }
@@ -72,7 +71,7 @@ namespace EdgeRag
                         maxTokens = 65536;
                     }
 
-                    iOManager.SendMessage($"{modelManager.modelType} detected, max tokens set to {maxTokens}");
+                    IOManager.SendMessage($"{modelManager.modelType} detected, max tokens set to {maxTokens}");
                 }
 
 
@@ -86,28 +85,28 @@ namespace EdgeRag
         {
             if (session == null) return;
 
-            iOManager.SendMessage("Chat session started, please input your query:\n");
+            IOManager.SendMessage("Chat session started, please input your query:\n");
             while (true)
             {
-                string userInput = await iOManager.ReadLineAsync();
+                string userInput = await IOManager.ReadLineAsync();
 
                 if (string.IsNullOrWhiteSpace(userInput) || userInput.ToLower() == "exit" || userInput.ToLower() == "back")
                 {
-                    iOManager.SendMessage("Exiting chat session.");
+                    IOManager.SendMessage("Exiting chat session.");
                     break;
                 }
 
                 if (useDatabaseForChat)
                 {
                     var withDatabaseResponse = await databaseManager.QueryDatabase(userInput);
-                    iOManager.DisplayGraphicalScores(withDatabaseResponse.incidentNumbers, withDatabaseResponse.scores);
+                    IOManager.DisplayGraphicalScores(withDatabaseResponse.incidentNumbers, withDatabaseResponse.scores);
                     string response = await InteractWithModelAsync(withDatabaseResponse.summarizedText, maxTokens, false);
-                    iOManager.SendMessage(response + "\n");
+                    IOManager.SendMessage(response + "\n");
                 }
                 else
                 {
                     string response = await InteractWithModelAsync(userInput, maxTokens, false);
-                    iOManager.SendMessage(response + "\n");
+                    IOManager.SendMessage(response + "\n");
                 }
             }
         }
@@ -138,7 +137,7 @@ namespace EdgeRag
                 // This allows control over whether the message is streamed or not
                 if (!internalChat)
                 {
-                    iOManager.SendMessage(text);
+                    IOManager.SendMessage(text);
                 }
                 prompt += text;
             }

@@ -21,9 +21,8 @@ namespace EdgeRag
         private string embeddingColumnName;
         private long currentIncidentNumber;
 
-        public SyntheticDataGenerator(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, ConversationManager conversationManager, int questionBatchSize)
+        public SyntheticDataGenerator(ModelManager modelManager, DatabaseManager databaseManager, ConversationManager conversationManager, int questionBatchSize)
         {
-            this.iOManager = iOManager;
             this.modelManager = modelManager;
             this.databaseManager = databaseManager;
             this.conversationManager = conversationManager;
@@ -36,9 +35,9 @@ namespace EdgeRag
             embeddingColumnName = $"{modelName}Embeddings";
         }
 
-        public static async Task<SyntheticDataGenerator> CreateAsync(IOManager iOManager, ModelManager modelManager, DatabaseManager databaseManager, ConversationManager conversationManager, int questionBatchSize)
+        public static async Task<SyntheticDataGenerator> CreateAsync(ModelManager modelManager, DatabaseManager databaseManager, ConversationManager conversationManager, int questionBatchSize)
         {
-            var syntheticDataGenerator = new SyntheticDataGenerator(iOManager, modelManager, databaseManager, conversationManager, questionBatchSize);
+            var syntheticDataGenerator = new SyntheticDataGenerator(modelManager, databaseManager, conversationManager, questionBatchSize);
             await syntheticDataGenerator.InitializeAsync();
             return syntheticDataGenerator;
         }
@@ -65,7 +64,7 @@ namespace EdgeRag
             for (int i = 0; i < numQuestions; i++)
             {
                 currentIncidentNumber++;
-                iOManager.SendMessage($"Generating item {currentIncidentNumber}...\n");
+                IOManager.SendMessage($"Generating item {currentIncidentNumber}...\n");
                 string selectedTheme = SelectRandomTheme();
 
                 DataRow newRow = vectorDatabase.NewRow();

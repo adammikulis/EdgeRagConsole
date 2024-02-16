@@ -8,7 +8,6 @@ namespace EdgeRag
 {
     public class DatabaseManager
     {
-        private IOManager iOManager;
         private DataTable vectorDatabase;
         private ModelManager modelManager;
         private int numTopMatches;
@@ -16,9 +15,8 @@ namespace EdgeRag
         public string embeddingColumnName;
         public string summarizedText;
         public long highestIncidentNumber;
-        public DatabaseManager(IOManager iOManager, ModelManager modelManager, string jsonDbPath, int numTopMatches)
+        public DatabaseManager(ModelManager modelManager, string jsonDbPath, int numTopMatches)
         {
-            this.iOManager = iOManager;
             this.jsonDbPath = jsonDbPath;
             this.modelManager = modelManager;
             this.numTopMatches = numTopMatches;
@@ -27,9 +25,9 @@ namespace EdgeRag
             embeddingColumnName = $"{modelManager.modelName}Embeddings";
         }
 
-        public static async Task<DatabaseManager> CreateAsync(IOManager ioManager, ModelManager modelManager, string jsonDbPath, int numTopMatches )
+        public static async Task<DatabaseManager> CreateAsync(ModelManager modelManager, string jsonDbPath, int numTopMatches )
         {
-            var databaseManager = new DatabaseManager(ioManager, modelManager, jsonDbPath, numTopMatches);
+            var databaseManager = new DatabaseManager(modelManager, jsonDbPath, numTopMatches);
             await databaseManager.InitializeAsync();
             return databaseManager;
         }
