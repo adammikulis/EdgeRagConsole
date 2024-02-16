@@ -10,7 +10,7 @@ namespace EdgeRag
         public ConversationManager conversationManager;
         public SyntheticDataGenerator syntheticDataGenerator;
 
-        public static async Task<PipelineManager> CreateAsync(string modelDirectoryPath, string dataDirectoryPath, string dataFileName, int numTopMatches, uint seed, uint contextSize, int maxTokens, int numGpuLayers, uint numCpuThreads, float temperature, string[] systemMessages, string[] antiPrompts, int questionBatchSize)
+        public static async Task<PipelineManager> CreateAsync(string modelDirectoryPath, string dataDirectoryPath, int numTopMatches, uint seed, uint contextSize, int maxTokens, int numGpuLayers, uint numCpuThreads, float temperature, string[] systemMessages, string[] antiPrompts, int questionBatchSize)
         {
             var pipelineManager = new PipelineManager();
 
@@ -18,7 +18,7 @@ namespace EdgeRag
             pipelineManager.modelManager = await ModelManager.CreateAsync(modelDirectoryPath, seed, contextSize, numGpuLayers, numCpuThreads);
 
             // Initialize DatabaseManager
-            pipelineManager.databaseManager = await DatabaseManager.CreateAsync(pipelineManager.modelManager, dataDirectoryPath, dataFileName, numTopMatches);
+            pipelineManager.databaseManager = await DatabaseManager.CreateAsync(pipelineManager.modelManager, dataDirectoryPath, numTopMatches);
 
             // Initialize ConversationManager
             pipelineManager.conversationManager = await ConversationManager.CreateAsync(pipelineManager.modelManager, pipelineManager.databaseManager, maxTokens, systemMessages, antiPrompts);

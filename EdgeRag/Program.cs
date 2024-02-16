@@ -21,7 +21,6 @@ namespace EdgeRag
 
             string dataDirectory = @"datasets";
             string dataDirectoryPath = Path.Combine(projectDirectory, dataDirectory);
-            string dataFileName = "syntheticData.json";
 
             if (!Directory.Exists(modelDirectoryPath))
             {
@@ -45,7 +44,7 @@ namespace EdgeRag
 
             int questionBatchSize = 32;
 
-            var pipelineManager = await PipelineManager.CreateAsync(modelDirectoryPath, dataDirectoryPath, dataFileName, numTopMatches, seed, contextSize, maxTokens, numGpuLayers, numCpuThreads, temperature, systemMessages, antiPrompts, questionBatchSize);
+            var pipelineManager = await PipelineManager.CreateAsync(modelDirectoryPath, dataDirectoryPath, numTopMatches, seed, contextSize, maxTokens, numGpuLayers, numCpuThreads, temperature, systemMessages, antiPrompts, questionBatchSize);
 
             // Menu loop
             await IOManager.RunMenuAsync(

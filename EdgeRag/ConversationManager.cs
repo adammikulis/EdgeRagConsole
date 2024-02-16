@@ -9,6 +9,7 @@ namespace EdgeRag
         private ModelManager modelManager;
         private DatabaseManager databaseManager;
         private string[] systemMessages;
+        private string selectedModelType;
         private int systemMessageNumber;
         private string[] antiPrompts;
 
@@ -29,6 +30,7 @@ namespace EdgeRag
             this.antiPrompts = antiPrompts;
             this.systemMessages = systemMessages;
             this.databaseManager = databaseManager;
+            this.selectedModelType = modelManager.selectedModelType;
             systemMessageNumber = 0;
 
         }
@@ -51,31 +53,31 @@ namespace EdgeRag
                 }
                 if (maxTokens == 0)
                 {
-                    if (modelManager.selectedModelname == "phi")
+                    switch (selectedModelType)
                     {
-                        maxTokens = 2048;
+                        case "phi":
+                            maxTokens = 2048;
+                            break;
+                        case "llama":
+                        case "mistral":
+                            maxTokens = 4096;
+                            break;
+                        case "mixtral":
+                            maxTokens = 32768;
+                            break;
+                        case "codellama":
+                            maxTokens = 65536;
+                            break;
+                        default:
+                            maxTokens = 4096;
+                            break;
                     }
-                    else if (modelManager.selectedModelname == "llama" || modelManager.selectedModelname == "mistral")
-                    {
-                        maxTokens = 4096;
-                    }
-                    else if (modelManager.selectedModelname == "mixtral")
-                    {
-                        maxTokens = 32768;
-                    }
-                    else if (modelManager.selectedModelname == "codellama")
-                    {
-                        maxTokens = 65536;
-                    }
-
-                    IOManager.SendMessage($"{modelManager.selectedModelname} detected, max tokens set to {maxTokens}\n");
+                    IOManager.SendMessage($"{selectedModelType} detected, max tokens set to {maxTokens}\n");
                 }
-
 
                 executor = new InteractiveExecutor(modelManager.context);
                 session = new ChatSession(executor);
             });
-             
         }
 
         public async Task StartChatAsync(bool useDatabaseForChat)
@@ -107,7 +109,6 @@ namespace EdgeRag
                 }
             }
         }
-
         public string CleanUpString(string input)
         {
             string cleanedString = input.Replace(antiPrompts[0], "")

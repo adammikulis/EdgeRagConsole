@@ -30,7 +30,7 @@ namespace EdgeRag
             this.maxTokens = conversationManager.GetMaxTokens();
             this.vectorDatabase = databaseManager.GetVectorDatabase();
             this.questionBatchSize = questionBatchSize;
-            modelType = modelManager.selectedModelname;
+            modelType = modelManager.selectedModelType;
             jsonDbPath = databaseManager.dataDirectoryPath;
             json = "";
         }
@@ -46,8 +46,6 @@ namespace EdgeRag
         {
             await Task.Run(async () =>
             {
-                
-
                 // Update vectorDatabase with missing columns based on loaded JSON data
                 string filePath = Path.Combine(jsonDbPath, databaseManager.dataFileName);
                 if (File.Exists(filePath))
@@ -120,7 +118,7 @@ namespace EdgeRag
                 if ((i + 1) % questionBatchSize == 0 || i == numQuestions - 1)
                 {
                     json = databaseManager.DataTableToJson(vectorDatabase);
-                    databaseManager.SaveJsonToFile(json);
+                    databaseManager.SaveJsonToFile(json, databaseManager.dataFileName);
                 }
             }
         }

@@ -16,7 +16,8 @@ namespace EdgeRag
         private uint numCpuThreads;
         private uint seed;
         public string selectedModelPath;
-        public string? selectedModelname;
+        public string? selectedModelName;
+        public string selectedModelType;
         public ModelParams? modelParams;
         public LLamaWeights? model;
         public LLamaEmbedder? embedder;
@@ -57,7 +58,7 @@ namespace EdgeRag
             model = LLamaWeights.LoadFromFile(modelParams);
             embedder = new LLamaEmbedder(model, modelParams);
             context = model.CreateContext(modelParams);
-            IOManager.SendMessage($"Model: {selectedModelname} from {modelDirectoryPath} loaded\n");
+            IOManager.SendMessage($"Model: {selectedModelName} from {modelDirectoryPath} loaded\n");
         }
 
         private void CreateModelParams()
@@ -84,8 +85,9 @@ namespace EdgeRag
             {
                 index -= 1;
                 selectedModelPath = filePaths[index];
-                selectedModelname = Path.GetFileNameWithoutExtension(selectedModelPath);
-                IOManager.SendMessage($"\nModel selected: {selectedModelname}\n");
+                selectedModelName = Path.GetFileNameWithoutExtension(selectedModelPath);
+                selectedModelType = selectedModelName.Split('-')[0].ToLower();
+                IOManager.SendMessage($"\nModel selected: {selectedModelName}\n");
                 validModelSelected = true;
 
                 // Determine the context size based on the model type
@@ -101,8 +103,7 @@ namespace EdgeRag
 
         private void DetermineMaxContextSize()
         {
-            selectedModelname = selectedModelname.Split('-')[0].ToLower();
-            switch (selectedModelname)
+            switch (selectedModelType)
             {
                 case "phi":
                     contextSize = 2048;
@@ -118,11 +119,10 @@ namespace EdgeRag
                     contextSize = 65536;
                     break;
                 default:
-                    // Set a default context size or handle unknown model type
-                    contextSize = 4096; // Example default
+                    contextSize = 4096;
                     break;
             }
-            IOManager.SendMessage($"{selectedModelname} detected, context size set to {contextSize}\n");
+            IOManager.SendMessage($"{selectedModelType} detected, context size set to {contextSize}\n");
         }
 
         private async Task<string[]> CheckModelsExist()

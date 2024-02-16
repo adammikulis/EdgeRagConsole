@@ -10,34 +10,26 @@ namespace EdgeRag
     {
         private DataTable vectorDatabase;
         private ModelManager modelManager;
-        string currentModelType;
         private int numTopMatches;
         public string dataDirectoryPath;
         public string dataFileName;
+        public string[] databaseTypes;
+        private List<(string Name, Type DataType)> techSupportColumns;
 
-        public DatabaseManager(ModelManager modelManager, string dataDirectoryPath, string dataFileName, int numTopMatches)
+        public DatabaseManager(ModelManager modelManager, string dataDirectoryPath, int numTopMatches)
         {
             this.dataDirectoryPath = dataDirectoryPath;
-            this.dataFileName = dataFileName;
             this.modelManager = modelManager;
             this.numTopMatches = numTopMatches;
             vectorDatabase = new DataTable();
-            currentModelType = modelManager.selectedModelname;
+            databaseTypes = new string[] { "Tech Support" };
+            string dataFileName = "";
 
-            vectorDatabase.Columns.Add("incidentNumber", typeof(long));
-            vectorDatabase.Columns.Add("incidentDetails", typeof(string));
-            vectorDatabase.Columns.Add("supportResponse", typeof(string));
-            vectorDatabase.Columns.Add("incidentSolution", typeof(string));
-            // vectorDatabase.Columns.Add("codellama", typeof(double[]));
-            // vectorDatabase.Columns.Add("llama", typeof(double[]));
-            vectorDatabase.Columns.Add("mistral", typeof(double[])); // Only Mistral is tested/supported right now for EdgeRag
-            // vectorDatabase.Columns.Add("mixtral", typeof(double[]));
-            // vectorDatabase.Columns.Add("phi", typeof(double[]));
         }
 
-        public static async Task<DatabaseManager> CreateAsync(ModelManager modelManager, string dataDirectoryPath, string dataFileName, int numTopMatches)
+        public static async Task<DatabaseManager> CreateAsync(ModelManager modelManager, string dataDirectoryPath, int numTopMatches)
         {
-            var databaseManager = new DatabaseManager(modelManager, dataDirectoryPath, dataFileName, numTopMatches);
+            var databaseManager = new DatabaseManager(modelManager, dataDirectoryPath, numTopMatches);
             await databaseManager.InitializeAsync();
             return databaseManager;
         }
@@ -46,29 +38,106 @@ namespace EdgeRag
         {
             await Task.Run(async () =>
             {
-                string filePath = Path.Combine(dataDirectoryPath, dataFileName);
-                if (File.Exists(filePath))
+                techSupportColumns = new List<(string Name, Type DataType)>
                 {
-                    string existingJson = ReadJsonFromFile(filePath);
-                    if (!string.IsNullOrWhiteSpace(existingJson))
-                    {
-                        DataTable existingTable = JsonToDataTable(existingJson);
-                        if (existingTable != null && existingTable.Rows.Count > 0)
-                        {
-                            // Populate vectorDatabase with existing data
-                            vectorDatabase = existingTable.Clone();
-
-                            // Populate vectorDatabase with existing data
-                            foreach (DataRow row in existingTable.Rows)
-                            {
-                                vectorDatabase.ImportRow(row);
-                            }
-
-                            // await GenerateMissingEmbeddingsAsync();
-                        }
-                    }
+                    ("incidentNumber", typeof(long)),
+                    ("incidentDetails", typeof(string)),
+                    ("supportResponse", typeof(string)),
+                    ("incidentSolution", typeof(string)),
+                    (modelManager.selectedModelType, typeof(double[]))
+                };
+                // List all .json files in the directory
+                var jsonFiles = Directory.GetFiles(dataDirectoryPath, "*.json");
+                if (jsonFiles.Length > 0)
+                {
+                    ListDatabases(jsonFiles);
+                    await LoadDatabase(jsonFiles);
+                }
+                else
+                {
+                    IOManager.SendMessage("No database found.\n");
+                    await CreateNewDatabase();
                 }
             });
+        }
+
+        private void AddDatabaseColumns(List<(string Name, Type DataType)> columns)
+        {
+            foreach (var column in columns)
+            {
+                if (!vectorDatabase.Columns.Contains(column.Name))
+                {
+                    vectorDatabase.Columns.Add(column.Name, column.DataType);
+                }
+            }
+        }
+
+
+        private async Task CreateNewDatabase()
+        {
+            IOManager.SendMessage("Please enter a name for the new database file (without extension): ");
+            dataFileName = await IOManager.ReadLineAsync();
+            dataFileName = $"{dataFileName}.json";
+            // Basic validation for custom file name
+            if (string.IsNullOrEmpty(dataFileName) || dataFileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            {
+                IOManager.SendMessage("Invalid file name. Returning to the previous menu.");
+                return;
+            }
+
+            // Define the available database types
+            
+
+            IOManager.SendMessage("\nPlease select the type of database you want to create:\n");
+            for (int i = 0; i < databaseTypes.Length; i++)
+            {
+                IOManager.SendMessage($"{i + 1}: {databaseTypes[i]}\n");
+            }
+
+            IOManager.SendMessage("\nEnter your choice: ");
+            string databaseType = await IOManager.ReadLineAsync();
+            if (int.TryParse(databaseType, out int databaseChoice) && databaseChoice >= 1 && databaseChoice <= databaseTypes.Length)
+            {
+                // Create an empty database for tech support (later updates will allow different types of dbs)
+                AddDatabaseColumns(techSupportColumns);
+                SaveJsonToFile(DataTableToJson(vectorDatabase), dataFileName);
+                IOManager.SendMessage($"\n{databaseTypes[databaseChoice - 1]} database named '{dataFileName}' created successfully.\n");
+            }
+            else
+            {
+                IOManager.SendMessage("\nInvalid choice. Returning to the previous menu.\n");
+            }
+        }
+
+        private async Task LoadDatabase(string[] jsonFiles)
+        {
+            IOManager.SendMessage("\nChoose which database to load (enter the number):\n");
+            string databaseChoice = await IOManager.ReadLineAsync();
+            if (int.TryParse(databaseChoice, out int choice) && choice >= 1 && choice <= jsonFiles.Length)
+            {
+                // Load the selected database
+                string selectedFilePath = jsonFiles[choice - 1];
+                dataFileName = Path.GetFileName(selectedFilePath);
+                string existingJson = ReadJsonFromFile(selectedFilePath);
+                if (!string.IsNullOrWhiteSpace(existingJson))
+                {
+                    DataTable existingTable = JsonToDataTable(existingJson);
+                    if (existingTable != null)
+                    {
+                        vectorDatabase = existingTable;
+                        AddDatabaseColumns(techSupportColumns);
+                    }
+                }
+            }
+        }
+
+        private static void ListDatabases(string[] jsonFiles)
+        {
+            IOManager.SendMessage("\nAvailable databases:\n");
+            for (int i = 0; i < jsonFiles.Length; i++)
+            {
+                IOManager.SendMessage($"{i + 1}: {Path.GetFileName(jsonFiles[i])}\n");
+            }
         }
 
         public async Task<long> GetHighestIncidentNumberAsync()
@@ -80,25 +149,7 @@ namespace EdgeRag
             });
         }
 
-        // Not needed until I implement additional model familiesl like llama or phi
-        private async Task GenerateMissingEmbeddingsAsync()
-        {
-            // Generate missing embeddings for the current model type
-            foreach (DataRow row in vectorDatabase.Rows)
-            {
-                if (row[currentModelType] == null)
-                {
-                    // Generate embeddings based on incidentDetails
-                    IOManager.SendMessage($"Generating missing embeddings for {row["incidentNumber"]}...");
-                    string incidentDetails = row["incidentDetails"].ToString();
-                    double[] newEmbeddings = await GenerateEmbeddingsAsync(incidentDetails);
-                    row[currentModelType] = newEmbeddings;
-                }
-            }
-
-            string json = DataTableToJson(vectorDatabase);
-            SaveJsonToFile(json);
-        }
+        
 
         // LLamaEmbedder generates floats which need to be converted to double due to JSON behavior
         public async Task<double[]> GenerateEmbeddingsAsync(string textToEmbed)
@@ -121,7 +172,7 @@ namespace EdgeRag
 
             foreach (DataRow row in vectorDatabase.Rows)
             {
-                var factEmbeddings = (double[])row[modelManager.selectedModelname];
+                var factEmbeddings = (double[])row[modelManager.selectedModelType];
                 double score = VectorSearchUtility.CosineSimilarity(queryEmbeddings, factEmbeddings);
                 long incidentNumber = Convert.ToInt64(row["incidentNumber"]);
                 string originalText = row["incidentSolution"].ToString();
@@ -159,7 +210,7 @@ namespace EdgeRag
             }
         }
 
-        public void SaveJsonToFile(string json)
+        public void SaveJsonToFile(string json, string dataFileName)
         {
             string filePath = Path.Combine(dataDirectoryPath, dataFileName);
 
@@ -181,9 +232,25 @@ namespace EdgeRag
             return vectorDatabase;
         }
 
-        public string GetJsonDbPath()
-        {
-            return Path.Combine(dataDirectoryPath, dataFileName);
-        }
+        // Not needed until I implement additional model familiesl like llama or phi
+        //private async Task GenerateMissingEmbeddingsAsync()
+        //{
+        //    // Generate missing embeddings for the current model type
+        //    foreach (DataRow row in vectorDatabase.Rows)
+        //    {
+        //        if (row[currentModelType] == null)
+        //        {
+        //            // Generate embeddings based on incidentDetails
+        //            IOManager.SendMessage($"Generating missing embeddings for {row["incidentNumber"]}...");
+        //            string incidentDetails = row["incidentDetails"].ToString();
+        //            double[] newEmbeddings = await GenerateEmbeddingsAsync(incidentDetails);
+        //            row[currentModelType] = newEmbeddings;
+        //        }
+        //    }
+
+        //    string json = DataTableToJson(vectorDatabase);
+        //    SaveJsonToFile(json);
+        //}
+
     }
 }
