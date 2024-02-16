@@ -1,8 +1,8 @@
-﻿using System.Data;
+﻿using System;
+using System.Data;
+using System.IO;
+using System.Threading.Tasks;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using LLama;
-using System.Text.RegularExpressions;
 
 namespace EdgeRag
 {
@@ -11,45 +11,89 @@ namespace EdgeRag
         private DataTable vectorDatabase;
         private ModelManager modelManager;
         private int numTopMatches;
-        public string jsonDbPath;
-        public string embeddingColumnName;
+        public string dataDirectoryPath;
+        public string dataFileName;
         public string summarizedText;
         public long highestIncidentNumber;
-        public DatabaseManager(ModelManager modelManager, string jsonDbPath, int numTopMatches)
+
+        public DatabaseManager(ModelManager modelManager, string dataDirectoryPath, string dataFileName, int numTopMatches)
         {
-            this.jsonDbPath = jsonDbPath;
+            this.dataDirectoryPath = dataDirectoryPath;
+            this.dataFileName = dataFileName;
             this.modelManager = modelManager;
             this.numTopMatches = numTopMatches;
             vectorDatabase = new DataTable();
             summarizedText = "";
-            embeddingColumnName = $"{modelManager.modelName}Embeddings";
+
+            // Add the fixed columns to the DataTable
+            vectorDatabase.Columns.Add("incidentNumber", typeof(long));
+            vectorDatabase.Columns.Add("incidentDetails", typeof(string));
+            vectorDatabase.Columns.Add("supportResponse", typeof(string));
+            vectorDatabase.Columns.Add("incidentSolution", typeof(string));
+            vectorDatabase.Columns.Add("codellama", typeof(double[]));
+            vectorDatabase.Columns.Add("llama", typeof(double[]));
+            vectorDatabase.Columns.Add("mistral", typeof(double[]));
+            vectorDatabase.Columns.Add("mixtral", typeof(double[]));
+            vectorDatabase.Columns.Add("phi", typeof(double[]));
         }
 
-        public static async Task<DatabaseManager> CreateAsync(ModelManager modelManager, string jsonDbPath, int numTopMatches )
+        public static async Task<DatabaseManager> CreateAsync(ModelManager modelManager, string dataDirectoryPath, string dataFileName, int numTopMatches)
         {
-            var databaseManager = new DatabaseManager(modelManager, jsonDbPath, numTopMatches);
+            var databaseManager = new DatabaseManager(modelManager, dataDirectoryPath, dataFileName, numTopMatches);
             await databaseManager.InitializeAsync();
             return databaseManager;
         }
 
         public async Task InitializeAsync()
         {
-            await Task.Run(() =>
+            await Task.Run(async () =>
             {
-                DetermineStartingIncidentNumber();
-                vectorDatabase.Columns.Add("incidentNumber", typeof(long));
-                vectorDatabase.Columns.Add("incidentDetails", typeof(string));
-                vectorDatabase.Columns.Add("supportResponse", typeof(string));
-                vectorDatabase.Columns.Add("userResponse", typeof(string));
-                vectorDatabase.Columns.Add("incidentSolution", typeof(string));
-                vectorDatabase.Columns.Add(embeddingColumnName, typeof(double[]));
-
-                if (File.Exists(jsonDbPath))
+                string filePath = Path.Combine(dataDirectoryPath, dataFileName);
+                if (File.Exists(filePath))
                 {
-                    string existingJson = ReadJsonFromFile(jsonDbPath);
-                    vectorDatabase = string.IsNullOrWhiteSpace(existingJson) ? new DataTable() : JsonToDataTable(existingJson);
+                    string existingJson = ReadJsonFromFile(filePath);
+                    if (!string.IsNullOrWhiteSpace(existingJson))
+                    {
+                        DataTable existingTable = JsonToDataTable(existingJson);
+                        if (existingTable != null && existingTable.Rows.Count > 0)
+                        {
+                            // Populate vectorDatabase with existing data
+                            vectorDatabase = existingTable.Clone();
+
+                            // Populate vectorDatabase with existing data
+                            foreach (DataRow row in existingTable.Rows)
+                            {
+                                vectorDatabase.ImportRow(row);
+                            }
+
+                            await GenerateMissingEmbeddingsAsync();
+                            highestIncidentNumber = existingTable.AsEnumerable().Max(row => Convert.ToInt64(row["incidentNumber"]));
+                        }
+                    }
                 }
             });
+        }
+
+        private async Task GenerateMissingEmbeddingsAsync()
+        {
+            // Generate missing embeddings for the current model type
+            string currentModelType = modelManager.modelType;
+            foreach (DataRow row in vectorDatabase.Rows)
+            {
+                var embeddings = row[currentModelType] as double[];
+                if (embeddings == null || embeddings.Length == 0)
+                {
+                    // Generate embeddings based on incidentDetails
+                    IOManager.SendMessage($"Generating missing embeddings for {row["incidentNumber"]}...");
+                    string incidentDetails = row["incidentDetails"].ToString();
+                    double[] newEmbeddings = await GenerateEmbeddingsAsync(incidentDetails);
+                    row[currentModelType] = newEmbeddings;
+                }
+            }
+
+            // Serialize the DataTable to JSON with correct embedding data
+            string json = DataTableToJson(vectorDatabase);
+            SaveJsonToFile(json);
         }
 
         public async Task<double[]> GenerateEmbeddingsAsync(string textToEmbed)
@@ -58,7 +102,6 @@ namespace EdgeRag
             double[] embeddingsDouble = embeddingsFloat.Select(f => (double)f).ToArray();
             return embeddingsDouble;
         }
-
 
         public async Task<(string summarizedText, long[] incidentNumbers, double[] scores)> QueryDatabase(string query)
         {
@@ -74,7 +117,7 @@ namespace EdgeRag
 
             foreach (DataRow row in vectorDatabase.Rows)
             {
-                var factEmbeddings = (double[])row[embeddingColumnName];
+                var factEmbeddings = (double[])row[modelManager.modelType];
                 double score = VectorSearchUtility.CosineSimilarity(queryEmbeddings, factEmbeddings);
                 long incidentNumber = Convert.ToInt64(row["incidentNumber"]);
                 string originalText = row["incidentSolution"].ToString();
@@ -95,28 +138,32 @@ namespace EdgeRag
             return (summarizedText, incidentNumbers, scores);
         }
 
-
-        private long DetermineStartingIncidentNumber()
-        {
-            if (System.IO.File.Exists(jsonDbPath))
-            {
-                string existingJson = System.IO.File.ReadAllText(jsonDbPath);
-                if (!string.IsNullOrWhiteSpace(existingJson))
-                {
-                    DataTable existingTable = JsonToDataTable(existingJson);
-                    if (existingTable != null && existingTable.Rows.Count > 0)
-                    {
-                        highestIncidentNumber = existingTable.AsEnumerable().Max(row => Convert.ToInt64(row["incidentNumber"]));
-                    }
-                }
-            }
-            return 0;
-        }
-
         public string DataTableToJson(DataTable dataTable)
         {
-            return JsonConvert.SerializeObject(dataTable, Formatting.Indented);
+            List<Dictionary<string, object>> rows = new List<Dictionary<string, object>>();
+            foreach (DataRow row in dataTable.Rows)
+            {
+                Dictionary<string, object> dictRow = new Dictionary<string, object>();
+                foreach (DataColumn column in dataTable.Columns)
+                {
+                    if (row[column] is double[])
+                    {
+                        // Explicitly serialize double[] as a JSON array
+                        double[] embeddings = (double[])row[column];
+                        string jsonArray = JsonConvert.SerializeObject(embeddings);
+                        dictRow[column.ColumnName] = JsonConvert.DeserializeObject(jsonArray);
+                    }
+                    else
+                    {
+                        dictRow[column.ColumnName] = row[column];
+                    }
+                }
+                rows.Add(dictRow);
+            }
+            return JsonConvert.SerializeObject(rows, Formatting.Indented);
         }
+
+
 
         public DataTable JsonToDataTable(string json)
         {
@@ -130,23 +177,16 @@ namespace EdgeRag
             }
         }
 
-        public void SaveJsonToFile(string json, string filePath)
+        public void SaveJsonToFile(string json)
         {
-            string directory = Path.GetDirectoryName(filePath);
-            if (!Directory.Exists(directory))
+            string filePath = Path.Combine(dataDirectoryPath, dataFileName);
+
+            if (!Directory.Exists(dataDirectoryPath))
             {
-                Directory.CreateDirectory(directory);
+                Directory.CreateDirectory(dataDirectoryPath);
             }
 
-            if (File.Exists(filePath))
-            {
-                File.WriteAllText(filePath, json);
-            }
-            else
-            {
-                // Create a new file and write the JSON data
-                File.WriteAllText(filePath, json);
-            }
+            File.WriteAllText(filePath, json);
         }
 
         public string ReadJsonFromFile(string filePath)
@@ -158,10 +198,10 @@ namespace EdgeRag
         {
             return vectorDatabase;
         }
-        
+
         public string GetJsonDbPath()
         {
-            return jsonDbPath;
+            return Path.Combine(dataDirectoryPath, dataFileName);
         }
     }
 }

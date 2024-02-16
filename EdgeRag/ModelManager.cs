@@ -15,7 +15,6 @@ namespace EdgeRag
         private uint numCpuThreads;
         private uint seed;
         public string SelectedModelPath;
-        public string? modelName;
         public string? modelType;
         public ModelParams? modelParams;
         public LLamaWeights? model;
@@ -60,7 +59,7 @@ namespace EdgeRag
             {
                 for (int i = 0; i < filePaths.Length; i++)
                 {
-                    IOManager.SendMessage($"{i + 1}: {Path.GetFileName(filePaths[i])}");
+                    IOManager.SendMessage($"{i + 1}: {Path.GetFileName(filePaths[i])}\n");
                 }
 
                 IOManager.SendMessage("\nEnter the number of the model you want to load: ");
@@ -68,11 +67,11 @@ namespace EdgeRag
                 {
                     index -= 1;
                     SelectedModelPath = filePaths[index];
-                    modelName = Path.GetFileNameWithoutExtension(SelectedModelPath);
-                    IOManager.SendMessage($"Model selected: {modelName}");
+                    modelType = Path.GetFileNameWithoutExtension(SelectedModelPath);
+                    IOManager.SendMessage($"Model selected: {modelType}");
                     validModelSelected = true;
 
-                    modelType = modelName.Split('-')[0].ToLower();
+                    modelType = modelType.Split('-')[0].ToLower();
 
                     if (contextSize == 0)
                     {
@@ -114,7 +113,7 @@ namespace EdgeRag
             model = LLamaWeights.LoadFromFile(modelParams);
             embedder = new LLamaEmbedder(model, modelParams);
             context = model.CreateContext(modelParams);
-            IOManager.SendMessage($"\nModel: {modelName} from {SelectedModelPath}loaded\n");
+            IOManager.SendMessage($"\nModel: {modelType} from {SelectedModelPath}loaded\n");
         }
     }
 }

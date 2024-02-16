@@ -10,21 +10,18 @@ namespace EdgeRag
         public ConversationManager conversationManager;
         public SyntheticDataGenerator syntheticDataGenerator;
 
-        public static async Task<PipelineManager> CreateAsync(string modelDirectoryPath, string databaseJsonPath, int numTopMatches, uint seed, uint contextSize, int maxTokens, int numGpuLayers, uint numCpuThreads, float temperature, string[] systemMessages, string[] antiPrompts, int questionBatchSize, int numStars)
+        public static async Task<PipelineManager> CreateAsync(string modelDirectoryPath, string dataDirectoryPath, string dataFileName, int numTopMatches, uint seed, uint contextSize, int maxTokens, int numGpuLayers, uint numCpuThreads, float temperature, string[] systemMessages, string[] antiPrompts, int questionBatchSize)
         {
             var pipelineManager = new PipelineManager();
-
-            // Initialize IOManager
-            IOManager.OnOutputMessage += Console.Write;
 
             // Initialize ModelManager
             pipelineManager.modelManager = await ModelManager.CreateAsync(modelDirectoryPath, seed, contextSize, numGpuLayers, numCpuThreads);
 
             // Initialize DatabaseManager
-            pipelineManager.databaseManager = await DatabaseManager.CreateAsync(pipelineManager.modelManager, databaseJsonPath, numTopMatches);
+            pipelineManager.databaseManager = await DatabaseManager.CreateAsync(pipelineManager.modelManager, dataDirectoryPath, dataFileName, numTopMatches);
 
             // Initialize ConversationManager
-            pipelineManager.conversationManager = await ConversationManager.CreateAsync(pipelineManager.modelManager, pipelineManager.databaseManager, maxTokens, temperature, systemMessages, antiPrompts);
+            pipelineManager.conversationManager = await ConversationManager.CreateAsync(pipelineManager.modelManager, pipelineManager.databaseManager, maxTokens, systemMessages, antiPrompts);
 
             // Initialize SyntheticDataGenerator
             pipelineManager.syntheticDataGenerator = await SyntheticDataGenerator.CreateAsync(pipelineManager.modelManager, pipelineManager.databaseManager, pipelineManager.conversationManager, questionBatchSize);

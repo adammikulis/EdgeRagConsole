@@ -11,7 +11,6 @@ namespace EdgeRag
         private string[] systemMessages;
         private int systemMessageNumber;
         private string[] antiPrompts;
-        private int antiPromptsNumber;
 
         private float temperature;
         private int maxTokens;
@@ -22,23 +21,21 @@ namespace EdgeRag
 
         public event Action<string> OnMessage = delegate { };
 
-        public ConversationManager(ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts)
+        public ConversationManager(ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, string[] systemMessages, string[] antiPrompts)
         {
             this.databaseManager = databaseManager;
             this.modelManager = modelManager;
             this.maxTokens = maxTokens;
-            this.temperature = temperature;
             this.antiPrompts = antiPrompts;
             this.systemMessages = systemMessages;
             this.databaseManager = databaseManager;
             systemMessageNumber = 0;
-            antiPromptsNumber = 0;
 
         }
 
-        public static async Task<ConversationManager> CreateAsync(ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, float temperature, string[] systemMessages, string[] antiPrompts)
+        public static async Task<ConversationManager> CreateAsync(ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, string[] systemMessages, string[] antiPrompts)
         {
-            var conversationManager = new ConversationManager(modelManager, databaseManager, maxTokens, temperature, systemMessages, antiPrompts);
+            var conversationManager = new ConversationManager(modelManager, databaseManager, maxTokens, systemMessages, antiPrompts);
             await conversationManager.InitializeAsync();
             return conversationManager;
         }
@@ -100,12 +97,12 @@ namespace EdgeRag
                 {
                     var withDatabaseResponse = await databaseManager.QueryDatabase(userInput);
                     IOManager.DisplayGraphicalScores(withDatabaseResponse.incidentNumbers, withDatabaseResponse.scores);
-                    string response = await InteractWithModelAsync(withDatabaseResponse.summarizedText, maxTokens, false);
+                    string response = await InteractWithModelAsync(withDatabaseResponse.summarizedText, maxTokens, temperature, false);
                     IOManager.SendMessage(response + "\n");
                 }
                 else
                 {
-                    string response = await InteractWithModelAsync(userInput, maxTokens, false);
+                    string response = await InteractWithModelAsync(userInput, maxTokens, temperature, false);
                     IOManager.SendMessage(response + "\n");
                 }
             }
@@ -127,7 +124,7 @@ namespace EdgeRag
             return cleanedString;
         }
 
-        public async Task<string> InteractWithModelAsync(string prompt, int maxTokens, bool internalChat)
+        public async Task<string> InteractWithModelAsync(string prompt, int maxTokens, float temperature, bool internalChat)
         {
             if (session == null) return "Session still initializing, please wait.\n";
             prompt = $"{systemMessages[systemMessageNumber]} {prompt}".Trim();
