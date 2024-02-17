@@ -8,11 +8,16 @@
 		<PublishAot>true</PublishAot>
 		<InvariantGlobalization>true</InvariantGlobalization>
 		<Configurations>DebugCPU;DebugCUDA12;ReleaseCPU;ReleaseCUDA12</Configurations>
+		<SelfContained>true</SelfContained>
+		<PublishTrimmed>true</PublishTrimmed>
+		<PublishReadyToRun>true</PublishReadyToRun>
+		<DebugType Condition="'$(Configuration)' == 'ReleaseCPU' or '$(Configuration)' == 'ReleaseCUDA12'">none</DebugType>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)'=='DebugCPU'">
-	  <DefineConstants>RELEASECPU</DefineConstants>
+		<DefineConstants>RELEASECPU</DefineConstants>
 	</PropertyGroup>
+
 	<PropertyGroup Condition="'$(Configuration)'=='DebugCUDA12'">
 		<DefineConstants>RELEASECUDA12</DefineConstants>
 	</PropertyGroup>
@@ -20,6 +25,7 @@
 	<PropertyGroup Condition="'$(Configuration)'=='ReleaseCPU'">
 		<DefineConstants>RELEASECPU</DefineConstants>
 	</PropertyGroup>
+
 	<PropertyGroup Condition="'$(Configuration)'=='ReleaseCUDA12'">
 		<DefineConstants>RELEASECUDA12</DefineConstants>
 	</PropertyGroup>

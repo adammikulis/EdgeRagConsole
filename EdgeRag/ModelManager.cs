@@ -68,7 +68,8 @@ namespace EdgeRag
                 }
                 else
                 {
-                    IOManager.SendMessage("CUDA 12.1 is not installed. Use ReleaseCPU version if you don't have an Nvidia GPU or download here: https://developer.nvidia.com/cuda-12-1-0-download-archive\nExiting...\n");
+                    IOManager.SendMessage("CUDA 12.1 is not installed. Use ReleaseCPU version if you don't have an Nvidia GPU or download here: https://developer.nvidia.com/cuda-12-1-0-download-archive\nHit any key to exit...\n");
+                    Console.ReadKey();
                     Environment.Exit(0);
                 }
             #endif
