@@ -7,11 +7,12 @@ using System.Threading.Tasks;
 
 namespace EdgeRag
 {
-    public class ModelManager
+    public class ModelManager : IDisposable
     {
         private string modelDirectoryPath;
         private uint contextSize;
-        private int numGpuLayers;
+        private int gpuLayerCount;
+        private const int maxGpuLayers = 33;
         private uint numCpuThreads;
         private uint seed;
         public string selectedModelPath;
@@ -22,18 +23,17 @@ namespace EdgeRag
         public LLamaEmbedder? embedder;
         public LLamaContext? context;
 
-        public ModelManager(string modelDirectoryPath, uint seed, uint contextSize, int numGpuLayers, uint numCpuThreads)
+        public ModelManager(string modelDirectoryPath, uint seed, uint contextSize, uint numCpuThreads)
         {
             this.modelDirectoryPath = modelDirectoryPath;
             this.contextSize = contextSize;
-            this.numGpuLayers = numGpuLayers;
             this.numCpuThreads = numCpuThreads;
             this.seed = seed;
         }
 
-        public static async Task<ModelManager> CreateAsync(string modelDirectoryPath, uint seed, uint contextSize, int numGpuLayers, uint numCpuThreads)
+        public static async Task<ModelManager> CreateAsync(string modelDirectoryPath, uint seed, uint contextSize, uint numCpuThreads)
         {
-            var modelManager = new ModelManager(modelDirectoryPath, seed, contextSize, numGpuLayers, numCpuThreads);
+            var modelManager = new ModelManager(modelDirectoryPath, seed, contextSize, numCpuThreads);
             await modelManager.InitializeAsync();
             return modelManager;
         }
@@ -49,17 +49,86 @@ namespace EdgeRag
             {
                 validModelSelected = await DisplayAndLoadModels(filePaths, validModelSelected);
             }
+
+            // GPU initialization depends on which release user is running
+            gpuLayerCount = 0;
+            #if RELEASECUDA12
+                // CUDA-specific initialization
+                string windowsCudaPath = @"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.1";
+                string linuxCudaPath = "/usr/local/cuda-12.1";
+                if (System.IO.Directory.Exists(windowsCudaPath) || System.IO.Directory.Exists(linuxCudaPath))
+                {
+                    IOManager.SendMessage("CUDA 12.1 is installed, GPU inference enabled\nSet GpuLayerCount (-1 is entire model to VRAM, 0 is cpu-only, layer range is 1-33): ");
+                    string input = await IOManager.ReadLineAsync();
+                    gpuLayerCount = int.Parse(input);
+                    if (gpuLayerCount > 33)
+                    {
+                        gpuLayerCount = 33;
+                    }
+                }
+                else
+                {
+                    IOManager.SendMessage("CUDA 12.1 is not installed. Use ReleaseCPU version if you don't have an Nvidia GPU or download here: https://developer.nvidia.com/cuda-12-1-0-download-archive\nExiting...\n");
+                    Environment.Exit(0);
+                }
+            #endif
+
+            #if RELEASECPU
+                // CPU initialization
+                IOManager.SendMessage("Running in CPU mode, no CUDA checks required.");
+                    numGpuLayers = 0;
+            #endif
+
             CreateModelParams();
             LoadModelEmbedderContext();
         }
 
+        // Used to manually unload model
+        public void Dispose()
+        {
+            model.Dispose();
+            embedder.Dispose();
+            context.Dispose();
 
+            model = null;
+            embedder = null;
+            context = null;
+        }
+
+        public void UnloadModel()
+        {
+            Dispose();
+            IOManager.SendMessage("\nModel unloaded successfully.\n");
+        }
+
+        public async Task LoadDifferentModelAsync(string modelPath)
+        {
+            UnloadModel();
+            selectedModelPath = modelPath;
+            selectedModelName = Path.GetFileNameWithoutExtension(selectedModelPath);
+            selectedModelType = selectedModelName.Split('-')[0].ToLower();
+
+            await InitializeAsync();
+        }
         private void LoadModelEmbedderContext()
         {
+    
             model = LLamaWeights.LoadFromFile(modelParams);
             embedder = new LLamaEmbedder(model, modelParams);
             context = model.CreateContext(modelParams);
             IOManager.SendMessage($"Model: {selectedModelName} from {modelDirectoryPath} loaded\n");
+            if ((gpuLayerCount == -1) || (gpuLayerCount == maxGpuLayers))
+            {
+                IOManager.SendMessage("\nAll layers moved to GPU\n");
+            }
+            else if (gpuLayerCount == 0)
+            {
+                IOManager.SendMessage("\nCPU inference only\n");
+            }
+            else if ((gpuLayerCount > 0) && (gpuLayerCount < maxGpuLayers))
+            {
+                IOManager.SendMessage($"\n{gpuLayerCount}/{maxGpuLayers} possible layers moved to GPU\n");
+            }
         }
 
         private void CreateModelParams()
@@ -69,7 +138,7 @@ namespace EdgeRag
                 Seed = seed,
                 ContextSize = contextSize,
                 EmbeddingMode = true, // Needs to be true to retrieve embeddings
-                GpuLayerCount = numGpuLayers,
+                GpuLayerCount = gpuLayerCount,
                 Threads = numCpuThreads
             };
         }
@@ -156,5 +225,3 @@ namespace EdgeRag
         }
     }
 }
-
-

@@ -119,6 +119,8 @@ namespace EdgeRag
             string cleanedString = input.Replace(antiPrompts[0], "")
                 .Replace("Narrator:", "")
                 .Replace("AI:", "")
+                .Replace("User:", "")
+                .Replace("Support:", "")
                 .Replace("\n", " ")
                 .Replace("\r", " ")
                 .Replace("     ", " ")
@@ -137,7 +139,7 @@ namespace EdgeRag
 
             await foreach (var text in session.ChatAsync(new ChatHistory.Message(AuthorRole.User, prompt), new InferenceParams { MaxTokens = maxTokens, Temperature = temperature, AntiPrompts = antiPrompts }))
             {
-                // This allows control over whether the message is streamed or not
+                // This allows control over whether the message is streamed or not, set to true for "internal" dialog
                 if (!internalChat)
                 {
                     IOManager.SendMessage(text);
@@ -149,14 +151,12 @@ namespace EdgeRag
 
         public async Task<(string summarizedText, long[] incidentNumbers, double[] scores)> QueryDatabase(string prompt)
         {
-            // Check if the DataTable is empty
             if (vectorDatabase.Rows.Count == 0)
             {
                 return (prompt, new long[0], new double[0]);
             }
-            
-            // prompt += await InteractWithModelAsync($"As the user, make sure this has complete sentences and correct grammar: {prompt}", 64, 0.5f, false); // This increases the size of the user's prompt for ideally better matching
-            var queryEmbeddings = await databaseManager.GenerateEmbeddingsAsync($"{prompt}");
+
+            var queryEmbeddings = await databaseManager.GenerateEmbeddingsAsync(prompt);
             List<Tuple<double, long, string>> scoresIncidents = new List<Tuple<double, long, string>>();
 
             foreach (DataRow row in vectorDatabase.Rows)
@@ -168,7 +168,6 @@ namespace EdgeRag
                 scoresIncidents.Add(new Tuple<double, long, string>(score, incidentNumber, originalText));
             }
 
-            // If no matches were found, return early with empty arrays
             if (scoresIncidents.Count == 0)
             {
                 return (prompt, new long[0], new double[0]);
@@ -178,9 +177,15 @@ namespace EdgeRag
             long[] incidentNumbers = topMatches.Select(m => m.Item2).ToArray();
             double[] scores = topMatches.Select(m => m.Item1).ToArray();
 
-            prompt = topMatches.Count > 0 ? $"{topMatches[0].Item3} " : "";
-            return (prompt, incidentNumbers, scores);
+            // Summarize the top matches instead of appending all their content
+            string summaryRequest = $"Summarize the key ideas from the top incidents to address the following issue: {prompt}\n";
+            summaryRequest += string.Join("\n", topMatches.Select((match, index) => $"Incident {index + 1}: {match.Item3}"));
+
+            string summary = await InteractWithModelAsync(summaryRequest, 256, 0.5f, true);
+
+            return (summary, incidentNumbers, scores);
         }
+
 
         public ChatSession? GetSession()
         {

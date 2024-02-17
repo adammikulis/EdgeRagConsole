@@ -38,7 +38,7 @@ namespace EdgeRag
             return await Task.Run(() => Console.ReadLine());
         }
 
-        public static async Task RunMenuAsync(Func<Task> chat, Func<Task> chatUsingDatabase, Func<int, Task> generateQuestionsAndChat, Func<int, Task> generateQuestions, Func<Task> downloadModel, Action quit)
+        public static async Task RunMenuAsync(Func<Task> chat, Func<Task> chatUsingDatabase, Func<int, Task> generateQuestionsAndChat, Func<int, Task> generateQuestions, Func<Task> downloadModel, Func<Task> loadDifferentModel, Action quit)
         {
             while (true)
             {
@@ -48,7 +48,8 @@ namespace EdgeRag
                 SendMessage("\n3. Generate Questions and Chat using Database");
                 SendMessage("\n4. Generate Questions and Quit");
                 SendMessage("\n5. Download Model");
-                SendMessage("\n6. Quit");
+                SendMessage("\n6. Load Different Model");
+                SendMessage("\n7. Quit");
                 SendMessage("\nSelect an option: ");
 
                 var option = await ReadLineAsync();
@@ -74,6 +75,9 @@ namespace EdgeRag
                         await downloadModel();
                         break;
                     case "6":
+                        await loadDifferentModel();
+                        break;
+                    case "7":
                         quit();
                         return;
                     default:

@@ -10,7 +10,6 @@ namespace EdgeRag
     {
         private DataTable vectorDatabase;
         private ModelManager modelManager;
-        private int numTopMatches;
         public string dataDirectoryPath;
         public string dataFileName;
         public string[] databaseTypes;
@@ -20,7 +19,6 @@ namespace EdgeRag
         {
             this.dataDirectoryPath = dataDirectoryPath;
             this.modelManager = modelManager;
-            this.numTopMatches = numTopMatches;
             vectorDatabase = new DataTable();
             databaseTypes = new string[] { "Tech Support" };
             string dataFileName = "";
@@ -95,7 +93,7 @@ namespace EdgeRag
             {
                 // Create an empty database for tech support (later updates will allow different types of dbs)
                 AddDatabaseColumns(techSupportColumns);
-                SaveJsonToFile(DataTableToJson(vectorDatabase), dataFileName);
+                await SaveJsonToFileAsync(DataTableToJson(vectorDatabase), dataFileName);
                 IOManager.SendMessage($"\n{databaseTypes[databaseChoice - 1]} database named '{dataFileName}' created successfully.\n");
             }
             else
@@ -113,7 +111,7 @@ namespace EdgeRag
                 // Load the selected database
                 string selectedFilePath = jsonFiles[choice - 1];
                 dataFileName = Path.GetFileName(selectedFilePath);
-                string existingJson = ReadJsonFromFile(selectedFilePath);
+                string existingJson = await ReadJsonFromFileAsync(selectedFilePath);
                 if (!string.IsNullOrWhiteSpace(existingJson))
                 {
                     DataTable existingTable = JsonToDataTable(existingJson);
@@ -170,7 +168,7 @@ namespace EdgeRag
             }
         }
 
-        public void SaveJsonToFile(string json, string dataFileName)
+        public async Task SaveJsonToFileAsync(string json, string dataFileName)
         {
             string filePath = Path.Combine(dataDirectoryPath, dataFileName);
 
@@ -179,13 +177,15 @@ namespace EdgeRag
                 Directory.CreateDirectory(dataDirectoryPath);
             }
 
-            File.WriteAllText(filePath, json);
+            await File.WriteAllTextAsync(filePath, json);
         }
 
-        public string ReadJsonFromFile(string filePath)
+
+        public async Task<string> ReadJsonFromFileAsync(string filePath)
         {
-            return File.Exists(filePath) ? File.ReadAllText(filePath) : string.Empty;
+            return File.Exists(filePath) ? await File.ReadAllTextAsync(filePath) : string.Empty;
         }
+
 
         public DataTable GetVectorDatabase()
         {

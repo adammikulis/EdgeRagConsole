@@ -46,11 +46,12 @@ namespace EdgeRag
         {
             await Task.Run(async () =>
             {
-                // Update vectorDatabase with missing columns based on loaded JSON data
+                // Assuming databaseManager has an asynchronous method to read JSON from a file
                 string filePath = Path.Combine(jsonDbPath, databaseManager.dataFileName);
                 if (File.Exists(filePath))
                 {
-                    string existingJson = databaseManager.ReadJsonFromFile(filePath);
+                    // Use the asynchronous method to read JSON from file
+                    string existingJson = await databaseManager.ReadJsonFromFileAsync(filePath);
                     DataTable tempTable = string.IsNullOrWhiteSpace(existingJson) ? new DataTable() : databaseManager.JsonToDataTable(existingJson);
 
                     // Add missing columns to the vectorDatabase DataTable
@@ -64,6 +65,7 @@ namespace EdgeRag
                 }
             });
         }
+
 
 
         private string SelectRandomTheme()
@@ -118,7 +120,7 @@ namespace EdgeRag
                 if ((i + 1) % questionBatchSize == 0 || i == numQuestions - 1)
                 {
                     json = databaseManager.DataTableToJson(vectorDatabase);
-                    databaseManager.SaveJsonToFile(json, databaseManager.dataFileName);
+                    await databaseManager.SaveJsonToFileAsync(json, databaseManager.dataFileName);
                 }
             }
         }
