@@ -97,7 +97,7 @@ namespace EdgeRag
         public void UnloadModel()
         {
             Dispose();
-            IOManager.SendMessage("Model unloaded successfully.\n");
+            IOManager.SendMessageLine("Model unloaded successfully.");
         }
 
         public async Task LoadDifferentModelAsync(string modelPath)
@@ -111,10 +111,16 @@ namespace EdgeRag
         }
         private void LoadModelEmbedderContext()
         {
-    
+            // Load the model into memory, putting the specified amount of layers to the GPU
             model = LLamaWeights.LoadFromFile(modelParams);
+
+            // OpenAI uses a separate embedding model from its chat models, whereas with LLamaSharp your chat model is your embedder
             embedder = new LLamaEmbedder(model, modelParams);
+            
+            // The context is used for the conversation, takes up its own amount of memory (longer context means more usage)
             context = model.CreateContext(modelParams);
+            
+            
             IOManager.SendMessage($"Model: {selectedModelName} from {modelDirectoryPath} loaded\n");
             if ((gpuLayerCount == -1) || (gpuLayerCount == maxGpuLayers))
             {
@@ -144,13 +150,12 @@ namespace EdgeRag
 
         private bool DisplayAndLoadModels(string[] filePaths, bool validModelSelected)
         {
-            IOManager.PrintHeading("Large Language Model Selection");
-            IOManager.SendMessage($"\nCurrent model directory: {modelDirectoryPath}\n\nAvailable models:\n");
+            IOManager.ClearAndPrintHeading("Large Language Model Selection");
+            IOManager.SendMessageLine($"\nCurrent model directory: {modelDirectoryPath}\n\nAvailable models (choose a number):");
             for (int i = 0; i < filePaths.Length; i++)
             {
-                IOManager.SendMessage($"{i + 1}: {Path.GetFileName(filePaths[i])}\n");
+                IOManager.SendMessageLine($"{i + 1}: {Path.GetFileName(filePaths[i])}");
             }
-            IOManager.SendMessage("\nEnter the number of the model you want to load: ");
 
             if (int.TryParse(IOManager.ReadLine(), out int index) && index >= 1 && index <= filePaths.Length)
             {
@@ -166,7 +171,7 @@ namespace EdgeRag
             }
             else
             {
-                IOManager.SendMessage("Invalid input, please enter a number corresponding to the model list.\n");
+                IOManager.SendMessageLine("Invalid input, please enter a number corresponding to the model list.");
             }
 
             return validModelSelected;
@@ -203,8 +208,6 @@ namespace EdgeRag
             {
                 IOManager.ClearAndPrintHeading("Download a Model");
                 IOManager.SendMessageLine($"\nNo models found in the {modelDirectoryPath}");
-
-                // Directly attempt to download the default model without calling another method
                 await DownloadManager.DownloadModelAsync("mistral", modelDirectoryPath);
 
                 // Recheck the directory for models after attempting the download

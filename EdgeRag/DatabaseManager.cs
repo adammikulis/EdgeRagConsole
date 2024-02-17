@@ -1,4 +1,8 @@
-﻿using System.Data;
+﻿// This class initializes the vector database
+// It needs the current modelManager so it knows what column to add for vector embeddings
+
+
+using System.Data;
 using Newtonsoft.Json;
 
 namespace EdgeRag
@@ -38,6 +42,7 @@ namespace EdgeRag
                     ("incidentDetails", typeof(string)),
                     ("supportResponse", typeof(string)),
                     ("incidentSolution", typeof(string)),
+                    ("summarizedIncident", typeof(string)),
                     (modelManager.selectedModelType, typeof(double[]))
                 };
 
@@ -71,82 +76,104 @@ namespace EdgeRag
         {
             IOManager.ClearConsole();
             IOManager.PrintHeading("Vector Databases");
-            IOManager.SendMessage("\nPlease enter a name for the new database file (without extension): ");
-            dataFileName = IOManager.ReadLine();
-            dataFileName = $"{dataFileName}.json";
-            
-            if (string.IsNullOrEmpty(dataFileName) || dataFileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+
+            // Prompt for valid filename
+            bool validFileName = false;
+            while (!validFileName)
             {
-                IOManager.SendMessage("\nInvalid file name. Returning to menu.");
-                return;
+                IOManager.SendMessage("\nPlease enter a name for the new database file (without extension): ");
+                dataFileName = IOManager.ReadLine().Trim();
+                dataFileName = $"{dataFileName}.json";
+
+                if (!string.IsNullOrEmpty(dataFileName) && dataFileName.IndexOfAny(Path.GetInvalidFileNameChars()) < 0)
+                {
+                    validFileName = true;
+                }
+                else
+                {
+                    IOManager.SendMessage("\nInvalid file name. Please try again.");
+                }
             }
 
-            // This only includes Tech Support dbs for now but program will be generalized to allow the user to customize the db
-            IOManager.SendMessage("\nPlease select the type of database you want to create:\n");
-            for (int i = 0; i < databaseTypes.Length; i++)
+            // Prompt for valid database type
+            bool validChoiceMade = false;
+            while (!validChoiceMade)
             {
-                IOManager.SendMessage($"{i + 1}: {databaseTypes[i]}\n");
-            }
+                IOManager.SendMessage("\nPlease select the type of database you want to create:\n");
+                for (int i = 0; i < databaseTypes.Length; i++)
+                {
+                    IOManager.SendMessage($"{i + 1}: {databaseTypes[i]}\n");
+                }
 
-            IOManager.SendMessage("\nEnter your choice: ");
-            string databaseType = IOManager.ReadLine();
-            if (int.TryParse(databaseType, out int databaseChoice) && databaseChoice >= 1 && databaseChoice <= databaseTypes.Length)
-            {
-                // Create an empty database for tech support (later updates will allow different types of dbs)
-                AddDatabaseColumns(techSupportColumns);
-                await SaveJsonToFileAsync(DataTableToJson(vectorDatabase), dataFileName);
-                IOManager.SendMessage($"\n{databaseTypes[databaseChoice - 1]} database named '{dataFileName}' created successfully.\n");
-            }
-            else
-            {
-                IOManager.SendMessage("\nInvalid choice. Returning to menu.\n");
+                IOManager.SendMessage("\nEnter your choice: ");
+                string databaseType = IOManager.ReadLine();
+                if (int.TryParse(databaseType, out int databaseChoice) && databaseChoice >= 1 && databaseChoice <= databaseTypes.Length)
+                {
+                    // Create an empty database for tech support (later updates will allow different types of dbs)
+                    AddDatabaseColumns(techSupportColumns);
+                    await SaveJsonToFileAsync(DataTableToJson(vectorDatabase), dataFileName);
+                    IOManager.SendMessage($"\n{databaseTypes[databaseChoice - 1]} database named '{dataFileName}' created successfully.\n");
+                    validChoiceMade = true;
+                }
+                else
+                {
+                    IOManager.SendMessage("\nInvalid choice. Please try again.");
+                }
             }
         }
+
 
         private async Task LoadDatabase(string[] jsonFiles)
         {
             IOManager.ClearConsole();
             IOManager.PrintHeading("Vector Databases");
-            IOManager.SendMessage("\nEnter the number of which database to load, or enter " + (jsonFiles.Length + 1) + " to *Create New Database*:\n");
-            for (int i = 0; i < jsonFiles.Length; i++)
-            {
-                IOManager.SendMessageLine($"{i + 1}. {Path.GetFileName(jsonFiles[i])}");
-            }
-            IOManager.SendMessageLine($"{jsonFiles.Length + 1}. *Create New Database*");
 
-            string databaseChoice = IOManager.ReadLine();
-            if (int.TryParse(databaseChoice, out int choice))
+            bool validChoice = false;
+            while (!validChoice)
             {
-                if (choice >= 1 && choice <= jsonFiles.Length)
+                IOManager.SendMessage("\nEnter the number of which database to load, or enter " + (jsonFiles.Length + 1) + " to *Create New Database*:\n");
+                for (int i = 0; i < jsonFiles.Length; i++)
                 {
-                    // Load the selected database
-                    string selectedFilePath = jsonFiles[choice - 1];
-                    dataFileName = Path.GetFileName(selectedFilePath);
-                    string existingJson = await ReadJsonFromFileAsync(selectedFilePath);
-                    if (!string.IsNullOrWhiteSpace(existingJson))
+                    IOManager.SendMessageLine($"{i + 1}. {Path.GetFileName(jsonFiles[i])}");
+                }
+                IOManager.SendMessageLine($"{jsonFiles.Length + 1}. *Create New Database*");
+
+                string databaseChoice = IOManager.ReadLine();
+                if (int.TryParse(databaseChoice, out int choice))
+                {
+                    if (choice >= 1 && choice <= jsonFiles.Length)
                     {
-                        DataTable existingTable = JsonToDataTable(existingJson);
-                        if (existingTable != null)
+                        validChoice = true;
+                        // Load the selected database
+                        string selectedFilePath = jsonFiles[choice - 1];
+                        dataFileName = Path.GetFileName(selectedFilePath);
+                        string existingJson = await ReadJsonFromFileAsync(selectedFilePath);
+                        if (!string.IsNullOrWhiteSpace(existingJson))
                         {
-                            vectorDatabase = existingTable;
-                            AddDatabaseColumns(techSupportColumns);
+                            DataTable existingTable = JsonToDataTable(existingJson);
+                            if (existingTable != null)
+                            {
+                                vectorDatabase = existingTable;
+                                AddDatabaseColumns(techSupportColumns);
+                            }
                         }
                     }
-                }
-                else if (choice == jsonFiles.Length + 1)
-                {
-                    await CreateNewDatabase();
-                    jsonFiles = Directory.GetFiles(dataDirectoryPath, "*.json");
-                    await LoadDatabase(jsonFiles);
+                    else if (choice == jsonFiles.Length + 1)
+                    {
+                        validChoice = true;
+                        await CreateNewDatabase();
+                        jsonFiles = Directory.GetFiles(dataDirectoryPath, "*.json");
+                        await LoadDatabase(jsonFiles);
+                    }
+                    else
+                    {
+                        IOManager.SendMessage("\nInvalid option selected. Please try again.");
+                    }
                 }
                 else
                 {
-                    IOManager.SendMessage("\nInvalid option selected. Please try again.");
+                    IOManager.SendMessage("\nPlease enter a valid number.");
                 }
-            }
-            else
-            {
-                IOManager.SendMessage("\nPlease enter a valid number.");
             }
         }
 

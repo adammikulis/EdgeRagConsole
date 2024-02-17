@@ -1,4 +1,5 @@
-﻿
+﻿// This class is last to load and combines the model, conversation, and database managers to create synthetic data
+// Currently hard-coded to generate tech support data (to match the tech support table) but will be generalized later
 
 using System.Data;
 
@@ -45,15 +46,13 @@ namespace EdgeRag
         {
             await Task.Run(async () =>
             {
-                // Assuming databaseManager has an asynchronous method to read JSON from a file
                 string filePath = Path.Combine(jsonDbPath, databaseManager.dataFileName);
                 if (File.Exists(filePath))
                 {
-                    // Use the asynchronous method to read JSON from file
                     string existingJson = await databaseManager.ReadJsonFromFileAsync(filePath);
                     DataTable tempTable = string.IsNullOrWhiteSpace(existingJson) ? new DataTable() : databaseManager.JsonToDataTable(existingJson);
 
-                    // Add missing columns to the vectorDatabase DataTable
+                    // Add missing columns to the vector database
                     foreach (DataColumn column in tempTable.Columns)
                     {
                         if (!vectorDatabase.Columns.Contains(column.ColumnName))
@@ -74,14 +73,20 @@ namespace EdgeRag
 
         public async Task GenerateITDataPipeline()
         {
+            IOManager.ClearAndPrintHeading("Synthetic Ticket Generation");
+            IOManager.SendMessageLine("\nChoose a number:\n1: View tickets as they generate\n2. Silent ticket generation");
+            int choice = Convert.ToInt32(IOManager.ReadLine());
+            bool internalDialog = choice == 1 ? false : true;
+
             IOManager.SendMessage("\nEnter the number of questions to generate: ");
             numQuestions = Convert.ToInt32(IOManager.ReadLine());
             currentIncidentNumber = await databaseManager.GetHighestIncidentNumberAsync();
+            
             // Sets a minimum of 1 for questionBatchSize
             questionBatchSize = Math.Max(1, questionBatchSize);
 
-            float supportTemperature = 0.5f;
-            float userTemperature = 0.8f;
+            float supportTemperature = 0.5f; // Lower is more deterministic
+            float userTemperature = 0.8f; // Higher is more random
 
             for (int i = 0; i < numQuestions; i++)
             {
@@ -90,45 +95,37 @@ namespace EdgeRag
                 string selectedTheme = SelectRandomTheme();
 
                 DataRow newRow = vectorDatabase.NewRow();
-
-                // Ensure the 'incidentNumber' column exists and add it if necessary
-                if (!vectorDatabase.Columns.Contains("incidentNumber"))
-                {
-                    vectorDatabase.Columns.Add("incidentNumber", typeof(long));
-                }
-
                 newRow["incidentNumber"] = currentIncidentNumber;
 
                 // Sequentially generate and set the content, passing previous content as context (this is what LangChain does)
                 string incidentDetailsPrompt = "Describe a specific tech issue about: ";
-                incidentDetails = await conversationManager.InteractWithModelAsync($"{incidentDetailsPrompt}{selectedTheme}", maxTokens / 16, userTemperature, false);
-                incidentDetails = incidentDetails.Replace(incidentDetailsPrompt, "");
+                incidentDetails = await conversationManager.InteractWithModelAsync($"{incidentDetailsPrompt} {selectedTheme}", maxTokens / 16, userTemperature, internalDialog);
+                incidentDetails = incidentDetails.Replace(incidentDetailsPrompt, ""); // Always remove previous content after generating a response to avoid duplicated tokens
                 incidentDetails = incidentDetails.Replace(selectedTheme, "");
 
                 string supportResponsePrompt = "Try to solve this tech issue: ";
-                supportResponse = await conversationManager.InteractWithModelAsync($"{supportResponsePrompt}{incidentDetails}", maxTokens / 8, supportTemperature, false);
+                supportResponse = await conversationManager.InteractWithModelAsync($"{supportResponsePrompt} {incidentDetails}", maxTokens / 8, supportTemperature, internalDialog);
                 supportResponse = supportResponse.Replace(supportResponsePrompt, "");
-
-                // Always remove previous content after generating a response to avoid duplicated tokens
                 supportResponse = supportResponse.Replace(incidentDetails, "");
 
                 string incidentSolutionPrompt = "Choose the most likely solution from: ";
-                incidentSolution = await conversationManager.InteractWithModelAsync($"{incidentSolutionPrompt}{supportResponse}", maxTokens / 4, userTemperature, false);
+                incidentSolution = await conversationManager.InteractWithModelAsync($"{incidentSolutionPrompt} {supportResponse}", maxTokens / 4, userTemperature, internalDialog);
                 incidentSolution = incidentSolution.Replace(incidentSolutionPrompt, "");
                 incidentSolution = incidentSolution.Replace(supportResponse, "");
 
                 string summarizedIncidentSolutionPrompt = "Summarize: ";
-                string summarizedIncidentSolution = await conversationManager.InteractWithModelAsync($"{summarizedIncidentSolutionPrompt}{incidentSolution}", maxTokens / 16, userTemperature, false);
-                summarizedIncidentSolution = summarizedIncidentSolution.Replace(summarizedIncidentSolutionPrompt, "");
-                summarizedIncidentSolution = summarizedIncidentSolution.Replace(incidentSolution, "");
+                string summarizedIncident = await conversationManager.InteractWithModelAsync($"{summarizedIncidentSolutionPrompt} {incidentSolution}", maxTokens / 8, userTemperature, internalDialog);
+                summarizedIncident = summarizedIncident.Replace(summarizedIncidentSolutionPrompt, "");
+                summarizedIncident = summarizedIncident.Replace(incidentSolution, "");
 
                 // Assign generated content to the newRow
                 newRow["incidentDetails"] = incidentDetails;
                 newRow["supportResponse"] = supportResponse;
-                newRow["incidentSolution"] = summarizedIncidentSolution;
+                newRow["incidentSolution"] = incidentSolution;
+                newRow["summarizedIncident"] = summarizedIncident;
 
                 // Generate embeddings for the incidentDetails
-                double[] embeddings = await databaseManager.GenerateEmbeddingsAsync(incidentDetails);
+                double[] embeddings = await databaseManager.GenerateEmbeddingsAsync(incidentDetails + " " + incidentSolution);
                 newRow[modelType] = embeddings;
 
                 vectorDatabase.Rows.Add(newRow);

@@ -42,22 +42,22 @@ namespace EdgeRag
             string[] antiPrompts = { "<end>" }; // This is what the LLM emits to stop the message, do not change
             int questionBatchSize = 32; // This allows generated questions to be saved in batches to JSON instead of at the very ened
 
-            // The PipelineManager handles all setup/initalization and only runs once. It loads the ModelManager, DatabaseManager, ConversationManager, and SyntheticDataGenerator (in that order)
+            // The PipelineManager handles all setup/initalization. It loads the ModelManager, DatabaseManager, ConversationManager, and SyntheticDataGenerator (in that order)
             var pipelineManager = await PipelineManager.CreateAsync(modelDirectoryPath, dataDirectoryPath, numTopMatches, seed, contextSize, maxTokens, numCpuThreads, temperature, systemMessages, antiPrompts, questionBatchSize);
 
             // Main menu loop
             while (true)
             {
-                IOManager.PrintHeading("Main Menu");
-                IOManager.SendMessage("\nMenu:");
+                IOManager.ClearAndPrintHeading("Main Menu");
+                IOManager.SendMessage("\nMenu (choose a number):");
                 IOManager.SendMessage("\n1. Chat");
                 IOManager.SendMessage("\n2. Chat using Database");
                 IOManager.SendMessage("\n3. Generate Questions and Chat using Database");
                 IOManager.SendMessage("\n4. Generate Questions and Quit");
                 IOManager.SendMessage("\n5. Download Model");
                 IOManager.SendMessage("\n6. Load Different Model");
-                IOManager.SendMessage("\n7. Quit");
-                IOManager.SendMessage("\nSelect an option: ");
+                IOManager.SendMessage("\n7. Load Different Database");
+                IOManager.SendMessage("\n8. Quit\n");
                 var option = IOManager.ReadLine();
 
                 switch (option)
@@ -97,12 +97,18 @@ namespace EdgeRag
                         pipelineManager = await PipelineManager.CreateAsync(modelDirectoryPath, dataDirectoryPath, numTopMatches, seed, contextSize, maxTokens, numCpuThreads, temperature, systemMessages, antiPrompts, questionBatchSize);
                         break;
                 
-                    // Quit
+                    // Load different database
                     case "7":
+                        pipelineManager.databaseManager = await DatabaseManager.CreateAsync(pipelineManager.modelManager, dataDirectoryPath);
+                        pipelineManager.conversationManager = await ConversationManager.CreateAsync(pipelineManager.modelManager, pipelineManager.databaseManager, maxTokens, systemMessages, antiPrompts, numTopMatches);
+                        pipelineManager.syntheticDataGenerator = await SyntheticDataGenerator.CreateAsync(pipelineManager.modelManager, pipelineManager.databaseManager, pipelineManager.conversationManager, questionBatchSize);
+                        break;
+                    
+                    case "8":
                         pipelineManager.modelManager.Dispose();
                         Environment.Exit(0);
                         break;
-                    
+
                     default:
                         IOManager.SendMessage("\nInvalid option, please try again.\n");
                         break;

@@ -87,11 +87,11 @@ namespace EdgeRag
         {
             if (useDatabaseForChat)
             {
-                IOManager.PrintHeading("Chatbot - Using Database");
+                IOManager.ClearAndPrintHeading("Chatbot - Using Database");
             }
             else
             {
-                IOManager.PrintHeading("Chatbot - No Database");
+                IOManager.ClearAndPrintHeading("Chatbot - No Database");
             }
             
                 
@@ -157,6 +157,7 @@ namespace EdgeRag
             return prompt;
         }
 
+        // This is the method to turn a prompt into embeddings, match to the database, and then return the original solution
         public async Task<(string summarizedText, long[] incidentNumbers, double[] scores)> QueryDatabase(string prompt)
         {
             if (vectorDatabase.Rows.Count == 0)
@@ -181,21 +182,25 @@ namespace EdgeRag
                 return (prompt, new long[0], new double[0]);
             }
 
+            int numSummarizedIncidents = 1; // Set the number of incidents to summarize
             var topMatches = scoresIncidents.OrderByDescending(s => s.Item1).Take(numTopMatches).ToList();
             long[] incidentNumbers = topMatches.Select(m => m.Item2).ToArray();
             double[] scores = topMatches.Select(m => m.Item1).ToArray();
 
-            // Adjusted summary request to explicitly format each top match for clarity and decision-making
-            string summaryRequest = $"Summarize this in 30 words: ";
-            foreach (var (score, incidentNumber, originalText) in topMatches)
+            string summaryRequest = $"Choose the most relevant solution for {prompt}: ";
+
+            for (int i = 0; i < numSummarizedIncidents && i < topMatches.Count; i++)
             {
-                summaryRequest += $"{originalText}";
+                var (_, _, originalText) = topMatches[i];
+                summaryRequest += $"{originalText} ";
             }
 
-            string summary = await InteractWithModelAsync(summaryRequest, 256, 0.5f, true);
+            string summary = await InteractWithModelAsync(summaryRequest, maxTokens / 16, 0.5f, true); // Internal dialog
+            summary = CleanUpString(summary);
+            summary = summary.Replace(summaryRequest, "");
+            summary = summary.Replace(prompt, "");
 
             return (summary, incidentNumbers, scores);
         }
-
     }
 }

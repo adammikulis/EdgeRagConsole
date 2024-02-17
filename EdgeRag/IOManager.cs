@@ -2,12 +2,11 @@
 {
     public class IOManager
     {
-        private const int maxStars = 50;
+        private const int maxStars = 75; // Used for similarity match
         private const int headingTotalWidth = 100;
 
         public static event Action<string> OnOutputMessage;
 
-        // Private constructor to prevent instantiation from outside the class
         private IOManager()
         {
         }
@@ -52,6 +51,7 @@
             AwaitKeyPressAndClear();
         }
 
+        // This prints a formatted header at the top of the console with the chosen heading
         public static void PrintHeading(string heading)
         {
             int headingLength = heading.Length;
@@ -74,8 +74,7 @@
 
         public static void PrintCudaInitialization()
         {
-            ClearConsole();
-            PrintHeading("CUDA Setup -- GPU Acceleration");
+            ClearAndPrintHeading("CUDA Setup -- GPU Acceleration");
             SendMessage("\nCUDA 12.1 is installed, GPU inference enabled! Set the number of layers loaded to GPU based on your VRAM\n\n" +
                 "Set GpuLayerCount to -1 to move the entire model to VRAM, or 0 for cpu-only.\n\n" +
                 "If you get an error when loading the model, reduce the number of layers.\n\n" +
@@ -84,14 +83,14 @@
 
         public static void PrintCudaError()
         {
-            SendMessage("CUDA 12.1 is not installed. Use ReleaseCPU version if you don't have an Nvidia GPU or download here: https://developer.nvidia.com/cuda-12-1-0-download-archive\nHit any key to exit...\n");
+            SendMessageLine("CUDA 12.1 is not installed. Use ReleaseCPU version if you don't have an Nvidia GPU or download here: https://developer.nvidia.com/cuda-12-1-0-download-archive\nHit any key to exit...");
             AwaitKeypress();
             Environment.Exit(0);
         }
 
         public static void DisplayGraphicalScores(long[] incidentNumbers, double[] scores)
         {
-            SendMessage("Most similar tickets:\n");
+            SendMessageLine("Most similar tickets:");
             for (int i = 0; i < incidentNumbers.Length && i < 3; i++)
             {
                 long incidentNumber = incidentNumbers[i];
@@ -99,7 +98,7 @@
                 int starsCount = (int)Math.Round(score * maxStars);
                 string stars = new string('*', starsCount).PadRight(maxStars, '-');
 
-                SendMessage($"Incident {incidentNumber}: [{stars}] {score:F2}\n");
+                SendMessageLine($"Incident {incidentNumber}: Similarity: {score:F2} [{stars}]");
             }
         }
 

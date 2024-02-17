@@ -13,11 +13,12 @@
             {
                 try
                 {
+                    IOManager.ClearAndPrintHeading("Download a Model");
                     int bufferSize = 8192;
                     string url = "";
                     
                     var quants = new List<string> { "Q2_K", "Q3_K_M", "Q4_K_M", "Q5_K_M", "Q6_K", "Q8_0" };
-                    IOManager.SendMessage($"Downloading a {modelType} model, choose a quantization (lower = smaller model):\n");
+                    IOManager.SendMessage($"\nDownloading a {modelType} model, choose a quantization (lower = smaller model):\n");
                     for (int i = 0; i < quants.Count; i++)
                     {
                         IOManager.SendMessage($"{i + 1}. {quants[i].Split('_')[0]}\n");
