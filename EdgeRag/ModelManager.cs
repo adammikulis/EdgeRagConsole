@@ -10,7 +10,6 @@ namespace EdgeRag
     public class ModelManager
     {
         private string modelDirectoryPath;
-        private const string defaultModelUrl = "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q2_K.gguf";
         private uint contextSize;
         private int numGpuLayers;
         private uint numCpuThreads;
@@ -42,7 +41,8 @@ namespace EdgeRag
         public async Task InitializeAsync()
         {
             CheckDirectoryExists();
-            string[] filePaths = await CheckModelsExist();
+            await CheckAndDownloadModelIfNeeded();
+            string[] filePaths = Directory.GetFiles(modelDirectoryPath);
 
             bool validModelSelected = false;
             while (!validModelSelected)
@@ -52,6 +52,7 @@ namespace EdgeRag
             CreateModelParams();
             LoadModelEmbedderContext();
         }
+
 
         private void LoadModelEmbedderContext()
         {
@@ -125,35 +126,24 @@ namespace EdgeRag
             IOManager.SendMessage($"{selectedModelType} detected, context size set to {contextSize}\n");
         }
 
-        private async Task<string[]> CheckModelsExist()
+        private async Task CheckAndDownloadModelIfNeeded()
         {
             var filePaths = Directory.GetFiles(modelDirectoryPath);
             if (filePaths.Length == 0)
             {
-                filePaths = await DownloadDefaultModel(filePaths);
+                IOManager.SendMessage($"\nNo models found in the {modelDirectoryPath}\n");
+
+                // Directly attempt to download the default model without calling another method
+                await DownloadManager.DownloadModelAsync("mistral", modelDirectoryPath);
+
+                // Recheck the directory for models after attempting the download
+                filePaths = Directory.GetFiles(modelDirectoryPath);
+                if (filePaths.Length == 0)
+                {
+                    IOManager.SendMessage("\nFailed to download the default model. Please verify your internet connection and try again.\n");
+                    Environment.Exit(0);
+                }
             }
-
-            return filePaths;
-        }
-
-        private async Task<string[]> DownloadDefaultModel(string[] filePaths)
-        {
-            IOManager.SendMessage($"\nNo models found in the {modelDirectoryPath}. Attempting to download default model...\n");
-
-            // Specify the default model to download
-            
-            // Specify the destination folder, which is the current directoryPath
-            await DownloadManager.DownloadModelAsync(defaultModelUrl, modelDirectoryPath);
-
-            // Recheck the directory for models after attempting the download
-            filePaths = Directory.GetFiles(modelDirectoryPath);
-            if (filePaths.Length == 0)
-            {
-                IOManager.SendMessage("\nFailed to download the default model. Please verify your internet connection and try again.\n");
-                Environment.Exit(0);
-            }
-
-            return filePaths;
         }
 
         private void CheckDirectoryExists()

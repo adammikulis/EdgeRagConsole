@@ -39,6 +39,7 @@ namespace EdgeRag
                     }
 
                     string fileName = Path.GetFileName(url);
+                    IOManager.SendMessage($"Filename: {fileName}");
                     // Setting the full destination path
                     string destinationPath = Path.Combine(destinationFolder, fileName);
 

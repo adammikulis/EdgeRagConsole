@@ -15,7 +15,7 @@ namespace EdgeRag
         {
             IOManager.OnOutputMessage += Console.Write;
 
-            string defaultModelUrl = "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q2_K.gguf";
+           
             string modelDirectory = @"models";
             string projectDirectory = AppDomain.CurrentDomain.BaseDirectory;
             string modelDirectoryPath = Path.Combine(projectDirectory, modelDirectory);
@@ -47,7 +47,7 @@ namespace EdgeRag
 
             var pipelineManager = await PipelineManager.CreateAsync(modelDirectoryPath, dataDirectoryPath, numTopMatches, seed, contextSize, maxTokens, numGpuLayers, numCpuThreads, temperature, systemMessages, antiPrompts, questionBatchSize);
 
-            // Menu loop
+            // SIMPLIFY AND PUT ALL SWITCH HERE, REMOVE FROM IO AND MAKE A MENUMANAGER
             await IOManager.RunMenuAsync(
             chat: () => pipelineManager.conversationManager.StartChatAsync(false),
             chatUsingDatabase: () => pipelineManager.conversationManager.StartChatAsync(true),
