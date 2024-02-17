@@ -12,6 +12,7 @@
 		<PublishTrimmed>true</PublishTrimmed>
 		<PublishReadyToRun>true</PublishReadyToRun>
 		<DebugType Condition="'$(Configuration)' == 'ReleaseCPU' or '$(Configuration)' == 'ReleaseCUDA12'">none</DebugType>
+		<Platforms>AnyCPU;x64</Platforms>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)'=='DebugCPU'">

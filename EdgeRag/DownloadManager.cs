@@ -1,9 +1,4 @@
-﻿using System;
-using System.IO;
-using System.Net.Http;
-using System.Threading.Tasks;
-
-namespace EdgeRag
+﻿namespace EdgeRag
 {
     public class DownloadManager
     {
@@ -25,9 +20,9 @@ namespace EdgeRag
                     IOManager.SendMessage($"Downloading a {modelType} model, choose a quantization (lower = smaller model):\n");
                     for (int i = 0; i < quants.Count; i++)
                     {
-                        IOManager.SendMessage($"{i + 1}. {quants[i]}\n");
+                        IOManager.SendMessage($"{i + 1}. {quants[i].Split('_')[0]}\n");
                     }
-                    var modelQuantIndex = await IOManager.ReadLineAsync();
+                    var modelQuantIndex = IOManager.ReadLine();
                     int index;
                     if (int.TryParse(modelQuantIndex, out index) && index > 0 && index <= quants.Count)
                     {

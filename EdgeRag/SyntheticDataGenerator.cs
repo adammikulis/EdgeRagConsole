@@ -1,8 +1,6 @@
-﻿using System.Data;
-using LLama;
-using System;
-using System.Linq;
-using System.Threading.Tasks;
+﻿
+
+using System.Data;
 
 namespace EdgeRag
 {
@@ -14,6 +12,7 @@ namespace EdgeRag
         private DataTable vectorDatabase;
         private string jsonDbPath;
         private string json;
+        private int numQuestions;
         private int maxTokens;
         private int questionBatchSize;
         private string modelType;
@@ -27,7 +26,7 @@ namespace EdgeRag
             this.modelManager = modelManager;
             this.databaseManager = databaseManager;
             this.conversationManager = conversationManager;
-            this.maxTokens = conversationManager.GetMaxTokens();
+            this.maxTokens = conversationManager.maxTokens;
             this.vectorDatabase = databaseManager.GetVectorDatabase();
             this.questionBatchSize = questionBatchSize;
             modelType = modelManager.selectedModelType;
@@ -66,8 +65,6 @@ namespace EdgeRag
             });
         }
 
-
-
         private string SelectRandomTheme()
         {
             string[] themes = { "a specific Apple device", "a specific Android device", "a specific Windows device", "a specific printer or copier", "a specific networking device", "a specific piece of software", "a specific piece of tech hardware" };
@@ -75,8 +72,10 @@ namespace EdgeRag
             return themes[rand.Next(themes.Length)];
         }
 
-        public async Task GenerateITDataPipeline(int numQuestions)
+        public async Task GenerateITDataPipeline()
         {
+            IOManager.SendMessage("\nEnter the number of questions to generate: ");
+            numQuestions = Convert.ToInt32(IOManager.ReadLine());
             currentIncidentNumber = await databaseManager.GetHighestIncidentNumberAsync();
             // Sets a minimum of 1 for questionBatchSize
             questionBatchSize = Math.Max(1, questionBatchSize);
@@ -101,14 +100,32 @@ namespace EdgeRag
                 newRow["incidentNumber"] = currentIncidentNumber;
 
                 // Sequentially generate and set the content, passing previous content as context (this is what LangChain does)
-                incidentDetails = await conversationManager.InteractWithModelAsync($"As the user, describe a tech issue you are having with {selectedTheme}", maxTokens / 8, userTemperature, false);
-                supportResponse = await conversationManager.InteractWithModelAsync($"As support, work with the user and ask for any additional information about " + incidentDetails, maxTokens / 4, supportTemperature, false);
-                incidentSolution = await conversationManager.InteractWithModelAsync($"Solve " + incidentDetails + " based on " + supportResponse, maxTokens, userTemperature, false);
+                string incidentDetailsPrompt = "Describe a specific tech issue about: ";
+                incidentDetails = await conversationManager.InteractWithModelAsync($"{incidentDetailsPrompt}{selectedTheme}", maxTokens / 16, userTemperature, false);
+                incidentDetails = incidentDetails.Replace(incidentDetailsPrompt, "");
+                incidentDetails = incidentDetails.Replace(selectedTheme, "");
+
+                string supportResponsePrompt = "Try to solve this tech issue: ";
+                supportResponse = await conversationManager.InteractWithModelAsync($"{supportResponsePrompt}{incidentDetails}", maxTokens / 8, supportTemperature, false);
+                supportResponse = supportResponse.Replace(supportResponsePrompt, "");
+
+                // Always remove previous content after generating a response to avoid duplicated tokens
+                supportResponse = supportResponse.Replace(incidentDetails, "");
+
+                string incidentSolutionPrompt = "Choose the most likely solution from: ";
+                incidentSolution = await conversationManager.InteractWithModelAsync($"{incidentSolutionPrompt}{supportResponse}", maxTokens / 4, userTemperature, false);
+                incidentSolution = incidentSolution.Replace(incidentSolutionPrompt, "");
+                incidentSolution = incidentSolution.Replace(supportResponse, "");
+
+                string summarizedIncidentSolutionPrompt = "Summarize: ";
+                string summarizedIncidentSolution = await conversationManager.InteractWithModelAsync($"{summarizedIncidentSolutionPrompt}{incidentSolution}", maxTokens / 16, userTemperature, false);
+                summarizedIncidentSolution = summarizedIncidentSolution.Replace(summarizedIncidentSolutionPrompt, "");
+                summarizedIncidentSolution = summarizedIncidentSolution.Replace(incidentSolution, "");
 
                 // Assign generated content to the newRow
                 newRow["incidentDetails"] = incidentDetails;
                 newRow["supportResponse"] = supportResponse;
-                newRow["incidentSolution"] = incidentSolution;
+                newRow["incidentSolution"] = summarizedIncidentSolution;
 
                 // Generate embeddings for the incidentDetails
                 double[] embeddings = await databaseManager.GenerateEmbeddingsAsync(incidentDetails);

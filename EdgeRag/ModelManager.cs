@@ -1,9 +1,8 @@
-﻿using LLama;
-using LLama.Abstractions;
+﻿// This class manages ands loads the current model based on specific parameters
+// It implements IDisposable, allowing the user to load a different model without closing the program
+
+using LLama;
 using LLama.Common;
-using System.Data;
-using System.IO;
-using System.Threading.Tasks;
 
 namespace EdgeRag
 {
@@ -47,7 +46,8 @@ namespace EdgeRag
             bool validModelSelected = false;
             while (!validModelSelected)
             {
-                validModelSelected = await DisplayAndLoadModels(filePaths, validModelSelected);
+                IOManager.ClearConsole();
+                validModelSelected = DisplayAndLoadModels(filePaths, validModelSelected);
             }
 
             // GPU initialization depends on which release user is running
@@ -58,8 +58,8 @@ namespace EdgeRag
                 string linuxCudaPath = "/usr/local/cuda-12.1";
                 if (System.IO.Directory.Exists(windowsCudaPath) || System.IO.Directory.Exists(linuxCudaPath))
                 {
-                    IOManager.SendMessage("CUDA 12.1 is installed, GPU inference enabled\nSet GpuLayerCount (-1 is entire model to VRAM, 0 is cpu-only, layer range is 1-33): ");
-                    string input = await IOManager.ReadLineAsync();
+                    IOManager.PrintCudaInitialization();
+                    string input = IOManager.ReadLine();
                     gpuLayerCount = int.Parse(input);
                     if (gpuLayerCount > 33)
                     {
@@ -68,9 +68,7 @@ namespace EdgeRag
                 }
                 else
                 {
-                    IOManager.SendMessage("CUDA 12.1 is not installed. Use ReleaseCPU version if you don't have an Nvidia GPU or download here: https://developer.nvidia.com/cuda-12-1-0-download-archive\nHit any key to exit...\n");
-                    Console.ReadKey();
-                    Environment.Exit(0);
+                    IOManager.PrintCudaError();
                 }
             #endif
 
@@ -99,7 +97,7 @@ namespace EdgeRag
         public void UnloadModel()
         {
             Dispose();
-            IOManager.SendMessage("\nModel unloaded successfully.\n");
+            IOManager.SendMessage("Model unloaded successfully.\n");
         }
 
         public async Task LoadDifferentModelAsync(string modelPath)
@@ -120,15 +118,15 @@ namespace EdgeRag
             IOManager.SendMessage($"Model: {selectedModelName} from {modelDirectoryPath} loaded\n");
             if ((gpuLayerCount == -1) || (gpuLayerCount == maxGpuLayers))
             {
-                IOManager.SendMessage("\nAll layers moved to GPU\n");
+                IOManager.SendMessage("All layers moved to GPU\n");
             }
             else if (gpuLayerCount == 0)
             {
-                IOManager.SendMessage("\nCPU inference only\n");
+                IOManager.SendMessage("CPU inference only\n");
             }
             else if ((gpuLayerCount > 0) && (gpuLayerCount < maxGpuLayers))
             {
-                IOManager.SendMessage($"\n{gpuLayerCount}/{maxGpuLayers} possible layers moved to GPU\n");
+                IOManager.SendMessage($"{gpuLayerCount}/{maxGpuLayers} possible layers moved to GPU\n");
             }
         }
 
@@ -144,21 +142,23 @@ namespace EdgeRag
             };
         }
 
-        private async Task<bool> DisplayAndLoadModels(string[] filePaths, bool validModelSelected)
+        private bool DisplayAndLoadModels(string[] filePaths, bool validModelSelected)
         {
-            IOManager.SendMessage($"\nCurrent model directory: {modelDirectoryPath}\nEnter the number of the model you want to load:\n");
+            IOManager.PrintHeading("Large Language Model Selection");
+            IOManager.SendMessage($"\nCurrent model directory: {modelDirectoryPath}\n\nAvailable models:\n");
             for (int i = 0; i < filePaths.Length; i++)
             {
                 IOManager.SendMessage($"{i + 1}: {Path.GetFileName(filePaths[i])}\n");
             }
+            IOManager.SendMessage("\nEnter the number of the model you want to load: ");
 
-            if (int.TryParse(await IOManager.ReadLineAsync(), out int index) && index >= 1 && index <= filePaths.Length)
+            if (int.TryParse(IOManager.ReadLine(), out int index) && index >= 1 && index <= filePaths.Length)
             {
                 index -= 1;
                 selectedModelPath = filePaths[index];
                 selectedModelName = Path.GetFileNameWithoutExtension(selectedModelPath);
                 selectedModelType = selectedModelName.Split('-')[0].ToLower();
-                IOManager.SendMessage($"\nModel selected: {selectedModelName}\n");
+                IOManager.SendMessage($"Model selected: {selectedModelName}\n");
                 validModelSelected = true;
 
                 // Determine the context size based on the model type
@@ -166,7 +166,7 @@ namespace EdgeRag
             }
             else
             {
-                IOManager.SendMessage("\nInvalid input, please enter a number corresponding to the model list.\n");
+                IOManager.SendMessage("Invalid input, please enter a number corresponding to the model list.\n");
             }
 
             return validModelSelected;
@@ -201,7 +201,8 @@ namespace EdgeRag
             var filePaths = Directory.GetFiles(modelDirectoryPath);
             if (filePaths.Length == 0)
             {
-                IOManager.SendMessage($"\nNo models found in the {modelDirectoryPath}\n");
+                IOManager.ClearAndPrintHeading("Download a Model");
+                IOManager.SendMessageLine($"\nNo models found in the {modelDirectoryPath}");
 
                 // Directly attempt to download the default model without calling another method
                 await DownloadManager.DownloadModelAsync("mistral", modelDirectoryPath);

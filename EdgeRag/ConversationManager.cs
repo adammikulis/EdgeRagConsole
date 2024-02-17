@@ -6,7 +6,6 @@ namespace EdgeRag
 {
     public class ConversationManager
     {
-        
         private ModelManager modelManager;
         private DatabaseManager databaseManager;
         private DataTable vectorDatabase;
@@ -14,9 +13,8 @@ namespace EdgeRag
         private string selectedModelType;
         private int systemMessageNumber;
         private string[] antiPrompts;
-
-        private float temperature;
-        private int maxTokens;
+        private const float averageTemperature = 0.5f;
+        public int maxTokens;
         private int numTopMatches;
         
 
@@ -77,7 +75,7 @@ namespace EdgeRag
                             maxTokens = 4096;
                             break;
                     }
-                    IOManager.SendMessage($"{selectedModelType} detected, max tokens set to {maxTokens}\n");
+                    IOManager.SendMessage($"{selectedModelType}-type model detected, max tokens set to {maxTokens}\n");
                 }
 
                 executor = new InteractiveExecutor(modelManager.context);
@@ -87,12 +85,22 @@ namespace EdgeRag
 
         public async Task StartChatAsync(bool useDatabaseForChat)
         {
+            if (useDatabaseForChat)
+            {
+                IOManager.PrintHeading("Chatbot - Using Database");
+            }
+            else
+            {
+                IOManager.PrintHeading("Chatbot - No Database");
+            }
+            
+                
             if (session == null) return;
 
             IOManager.SendMessage("Chat session started, please input your query:\n");
             while (true)
             {
-                string userInput = await IOManager.ReadLineAsync();
+                string userInput = IOManager.ReadLine();
 
                 if (string.IsNullOrWhiteSpace(userInput) || userInput.ToLower() == "exit" || userInput.ToLower() == "back")
                 {
@@ -104,12 +112,12 @@ namespace EdgeRag
                 {
                     var withDatabaseResponse = await QueryDatabase(userInput);
                     IOManager.DisplayGraphicalScores(withDatabaseResponse.incidentNumbers, withDatabaseResponse.scores);
-                    string response = await InteractWithModelAsync(withDatabaseResponse.summarizedText, maxTokens, temperature, false);
+                    string response = await InteractWithModelAsync(withDatabaseResponse.summarizedText, maxTokens, averageTemperature, false);
                     IOManager.SendMessage(response + "\n");
                 }
                 else
                 {
-                    string response = await InteractWithModelAsync(userInput, maxTokens, temperature, false);
+                    string response = await InteractWithModelAsync(userInput, maxTokens, averageTemperature, false);
                     IOManager.SendMessage(response + "\n");
                 }
             }
@@ -135,11 +143,11 @@ namespace EdgeRag
         public async Task<string> InteractWithModelAsync(string prompt, int maxTokens, float temperature, bool internalChat)
         {
             if (session == null) return "Session still initializing, please wait.\n";
-            prompt = $"{systemMessages[systemMessageNumber]} {prompt}".Trim();
+            prompt = $"{systemMessages[systemMessageNumber]}{prompt}".Trim();
 
             await foreach (var text in session.ChatAsync(new ChatHistory.Message(AuthorRole.User, prompt), new InferenceParams { MaxTokens = maxTokens, Temperature = temperature, AntiPrompts = antiPrompts }))
             {
-                // This allows control over whether the message is streamed or not, set to true for "internal" dialog
+                // This allows control over whether the message is streamed or not, set to true for "internal" dialog that doesn't print to console
                 if (!internalChat)
                 {
                     IOManager.SendMessage(text);
@@ -177,39 +185,17 @@ namespace EdgeRag
             long[] incidentNumbers = topMatches.Select(m => m.Item2).ToArray();
             double[] scores = topMatches.Select(m => m.Item1).ToArray();
 
-            // Summarize the top matches instead of appending all their content
-            string summaryRequest = $"Summarize the key ideas from the top incidents to address the following issue: {prompt}\n";
-            summaryRequest += string.Join("\n", topMatches.Select((match, index) => $"Incident {index + 1}: {match.Item3}"));
+            // Adjusted summary request to explicitly format each top match for clarity and decision-making
+            string summaryRequest = $"Summarize this in 30 words: ";
+            foreach (var (score, incidentNumber, originalText) in topMatches)
+            {
+                summaryRequest += $"{originalText}";
+            }
 
             string summary = await InteractWithModelAsync(summaryRequest, 256, 0.5f, true);
 
             return (summary, incidentNumbers, scores);
         }
 
-
-        public ChatSession? GetSession()
-        {
-            return this.session;
-        }
-
-        public int GetMaxTokens()
-        {
-            return this.maxTokens;
-        }
-
-        public float GetTemperature()
-        {
-            return this.temperature;
-        }
-
-        public string[] GetAntiPrompts()
-        {
-            return this.antiPrompts;
-        }
-
-        public string[] GetSystemMessages()
-        {
-            return this.systemMessages;
-        }
     }
 }

@@ -1,6 +1,10 @@
-﻿// Install Cuda 12.1 and run ReleaseCUDA12 to use Nvida GPU: https://developer.nvidia.com/cuda-12-1-0-download-archive
-// Note: Only use Mistral models as most testing was done with them (lower q means smaller, fast, less accurate)
-
+﻿// This program allows the user to generate synthetic tech support data and store in a vector database with a locally-run large language model (LLM)
+// The user can then chat with the LLM, querying the database with an issue to get exact solutions from past incidents
+// The tickets can be generated with a higher-quality model, and then a faster model can be used to query that data leading to performance increase
+// There are two distributions: one with a CPU backend that runs on all x64 devices and one with a CUDA12 backend that requires an Nvidia GPU
+// Install Cuda 12.1 and run ReleaseCUDA12 to use Nvida GPU: https://developer.nvidia.com/cuda-12-1-0-download-archive
+// There is a backend for Mac Metal but it is outdated and not tested by the creator of this program
+// Note: Only use Mistral models as all testing was done with them
 
 namespace EdgeRag
 {
@@ -9,12 +13,7 @@ namespace EdgeRag
         static async Task Main(string[] args)
         {
             IOManager.OnOutputMessage += Console.Write;
-            IOManager.SendMessage("Welcome to EdgeRag! This is a Retrieval-Augmented Generative (RAG) A.I. pipeline " +
-                      "that lets a local chatbot refer to existing solutions/documentation when crafting its response. " +
-                      "Everything is run on your device, creating a secure chat environment for sensitive data. " +
-                      "\nGenerate synthetic data to easily populate a database and then search. You can even use " +
-                      "a higher quality model to generate the tickets and then a faster, smaller model to serve as the chatbot. " +
-                      "\nRefer any questions to Adam Mikulis, and have fun!\n\n");
+            IOManager.PrintIntroMessage();
 
             string modelDirectory = @"models";
             string projectDirectory = AppDomain.CurrentDomain.BaseDirectory;
@@ -27,53 +26,88 @@ namespace EdgeRag
             {
                 Directory.CreateDirectory(modelDirectoryPath);
             }
-            if (!Directory.Exists(dataDirectoryPath)) 
-            { 
+            if (!Directory.Exists(dataDirectoryPath))
+            {
                 Directory.CreateDirectory(dataDirectoryPath);
             }
 
-            int numTopMatches = 3; // This is when querying the database of facts
-            string[] systemMessages = { $"" }; // Set this if you would like the LLM to always get a message first
+            int numTopMatches = 3; // This is when querying the database of facts, increase to compare to more tickets
+            string[] systemMessages = { $"" }; // Set this if you would like the LLM to always get a system message first
 
             uint seed = 0;
             uint contextSize = 0; // Set to 0 to use the maximum allowed for whatever model type you choose
             int maxTokens = 0; // Set to 0 to use the maximum allowed for whatever model type you choose
-            uint numCpuThreads = 8;
+            uint numCpuThreads = 8; // Use a number that matches your physical cores for best performance
             float temperature = 0.5f; // Lower is more deterministic, higher is more random
-            string[] antiPrompts = { "<end>" }; // This is what the LLM emits to stop the message
+            string[] antiPrompts = { "<end>" }; // This is what the LLM emits to stop the message, do not change
+            int questionBatchSize = 32; // This allows generated questions to be saved in batches to JSON instead of at the very ened
 
-            int questionBatchSize = 32;
-
+            // The PipelineManager handles all setup/initalization and only runs once. It loads the ModelManager, DatabaseManager, ConversationManager, and SyntheticDataGenerator (in that order)
             var pipelineManager = await PipelineManager.CreateAsync(modelDirectoryPath, dataDirectoryPath, numTopMatches, seed, contextSize, maxTokens, numCpuThreads, temperature, systemMessages, antiPrompts, questionBatchSize);
 
             // Main menu loop
-            await IOManager.RunMenuAsync(
-            chat: () => pipelineManager.conversationManager.StartChatAsync(false),
-            chatUsingDatabase: () => pipelineManager.conversationManager.StartChatAsync(true),
-            generateQuestionsAndChat: async (numQuestions) => {
-                await pipelineManager.syntheticDataGenerator.GenerateITDataPipeline(numQuestions);
-                await pipelineManager.conversationManager.StartChatAsync(true);
-            },
-            generateQuestions: async (numQuestions) => {
-                await pipelineManager.syntheticDataGenerator.GenerateITDataPipeline(numQuestions);
-                pipelineManager.modelManager.Dispose();
-                Environment.Exit(0);
-            },
-            downloadModel: async () => {
-                await DownloadManager.DownloadModelAsync("mistral", modelDirectoryPath);
-            },
-            loadDifferentModel: async() => {
-                if (pipelineManager.modelManager != null)
+            while (true)
+            {
+                IOManager.PrintHeading("Main Menu");
+                IOManager.SendMessage("\nMenu:");
+                IOManager.SendMessage("\n1. Chat");
+                IOManager.SendMessage("\n2. Chat using Database");
+                IOManager.SendMessage("\n3. Generate Questions and Chat using Database");
+                IOManager.SendMessage("\n4. Generate Questions and Quit");
+                IOManager.SendMessage("\n5. Download Model");
+                IOManager.SendMessage("\n6. Load Different Model");
+                IOManager.SendMessage("\n7. Quit");
+                IOManager.SendMessage("\nSelect an option: ");
+                var option = IOManager.ReadLine();
+
+                switch (option)
                 {
-                    pipelineManager.modelManager.Dispose();
-                    pipelineManager.modelManager = await ModelManager.CreateAsync(modelDirectoryPath, seed, contextSize, numCpuThreads);
-                    pipelineManager.conversationManager = await ConversationManager.CreateAsync(pipelineManager.modelManager, pipelineManager.databaseManager, maxTokens, systemMessages, antiPrompts, numTopMatches);
+                    // Chat
+                    case "1":
+                        await pipelineManager.conversationManager.StartChatAsync(false);
+                        break;
+                
+                    // Chat using database
+                    case "2":
+                        await pipelineManager.conversationManager.StartChatAsync(true);
+                        break;
+                
+                    // Generate questions and chat using database
+                    case "3":
+                   
+                        await pipelineManager.syntheticDataGenerator.GenerateITDataPipeline();
+                        await pipelineManager.conversationManager.StartChatAsync(true);
+                        break;
+                
+                    // Generate questions and quit
+                    case "4":
+                        await pipelineManager.syntheticDataGenerator.GenerateITDataPipeline();
+                        pipelineManager.modelManager.Dispose();
+                        Environment.Exit(0);
+                        break;
+                
+                    // Download model                
+                    case "5":
+                        await DownloadManager.DownloadModelAsync("mistral", modelDirectoryPath); // Hard-coded to Mistral for now, will allow llama and phi in the future;
+                        break;
+                
+                    // Load different model
+                    case "6":
+                        pipelineManager.modelManager.Dispose();
+                        pipelineManager = await PipelineManager.CreateAsync(modelDirectoryPath, dataDirectoryPath, numTopMatches, seed, contextSize, maxTokens, numCpuThreads, temperature, systemMessages, antiPrompts, questionBatchSize);
+                        break;
+                
+                    // Quit
+                    case "7":
+                        pipelineManager.modelManager.Dispose();
+                        Environment.Exit(0);
+                        break;
+                    
+                    default:
+                        IOManager.SendMessage("\nInvalid option, please try again.\n");
+                        break;
                 }
-            },
-            quit: () => {
-                pipelineManager.modelManager.Dispose();
-                Environment.Exit(0);
-            });
+            }
         }
     }
 }

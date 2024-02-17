@@ -1,11 +1,9 @@
-﻿using System;
-using System.Threading.Tasks;
-
-namespace EdgeRag
+﻿namespace EdgeRag
 {
     public class IOManager
     {
         private const int maxStars = 50;
+        private const int headingTotalWidth = 100;
 
         public static event Action<string> OnOutputMessage;
 
@@ -14,9 +12,81 @@ namespace EdgeRag
         {
         }
 
+        public static void ClearConsole()
+        {
+            Console.Clear();
+        }
+
         public static void SendMessage(string message)
         {
             OnOutputMessage?.Invoke(message);
+        }
+
+        public static void SendMessageLine(string message)
+        {
+            OnOutputMessage?.Invoke(message);
+            SendMessage("\n");
+        }
+
+        public static void AwaitKeypress()
+        {
+            Console.ReadKey();
+        }
+
+        public static void AwaitKeyPressAndClear()
+        {
+            AwaitKeypress();
+            ClearConsole();
+        }
+
+        public static void PrintIntroMessage()
+        {
+            ClearConsole();
+            PrintHeading("EdgeRag - A Local Tech Support Chatbot");
+            SendMessage("\nWelcome to EdgeRag! This is a Retrieval-Augmented Generative (RAG) A.I. pipeline " +
+                        "that lets you run a local chatbot\nand refer to existing solutions/documentation. " +
+                        "Everything is run on your device, creating a secure chat environment for sensitive data.\n\n" +
+                        "Generate synthetic data to easily populate a database and then search. You can even use " +
+                        "a higher quality model\nto generate the tickets and then a faster, smaller model to serve as the chatbot.\n\n" +
+                        "Refer any questions to Adam Mikulis, and have fun!\n\nPress any key to continue...");
+            AwaitKeyPressAndClear();
+        }
+
+        public static void PrintHeading(string heading)
+        {
+            int headingLength = heading.Length;
+            int starsWidth = (headingTotalWidth - headingLength) / 2;
+            string starsSide = new string('*', starsWidth);
+
+            string fullHeader = $"{starsSide} {heading} {starsSide}";
+
+            SendMessageLine(new string('*', headingTotalWidth + 2));
+            SendMessageLine(fullHeader);
+            SendMessageLine(new string('*', headingTotalWidth + 2));
+        }
+
+        public static void ClearAndPrintHeading(string heading)
+        {
+            ClearConsole();
+            PrintHeading(heading);
+        }
+
+
+        public static void PrintCudaInitialization()
+        {
+            ClearConsole();
+            PrintHeading("CUDA Setup -- GPU Acceleration");
+            SendMessage("\nCUDA 12.1 is installed, GPU inference enabled! Set the number of layers loaded to GPU based on your VRAM\n\n" +
+                "Set GpuLayerCount to -1 to move the entire model to VRAM, or 0 for cpu-only.\n\n" +
+                "If you get an error when loading the model, reduce the number of layers.\n\n" +
+                "How many layers to GPU? (range: -1 to 33): ");
+        }
+
+        public static void PrintCudaError()
+        {
+            SendMessage("CUDA 12.1 is not installed. Use ReleaseCPU version if you don't have an Nvidia GPU or download here: https://developer.nvidia.com/cuda-12-1-0-download-archive\nHit any key to exit...\n");
+            AwaitKeypress();
+            Environment.Exit(0);
         }
 
         public static void DisplayGraphicalScores(long[] incidentNumbers, double[] scores)
@@ -33,58 +103,10 @@ namespace EdgeRag
             }
         }
 
-        public static async Task<string> ReadLineAsync()
+        public static string ReadLine()
         {
-            return await Task.Run(() => Console.ReadLine());
-        }
-
-        public static async Task RunMenuAsync(Func<Task> chat, Func<Task> chatUsingDatabase, Func<int, Task> generateQuestionsAndChat, Func<int, Task> generateQuestions, Func<Task> downloadModel, Func<Task> loadDifferentModel, Action quit)
-        {
-            while (true)
-            {
-                SendMessage("\nMenu:");
-                SendMessage("\n1. Chat");
-                SendMessage("\n2. Chat using Database");
-                SendMessage("\n3. Generate Questions and Chat using Database");
-                SendMessage("\n4. Generate Questions and Quit");
-                SendMessage("\n5. Download Model");
-                SendMessage("\n6. Load Different Model");
-                SendMessage("\n7. Quit");
-                SendMessage("\nSelect an option: ");
-
-                var option = await ReadLineAsync();
-                switch (option)
-                {
-                    case "1":
-                        await chat();
-                        break;
-                    case "2":
-                        await chatUsingDatabase();
-                        break;
-                    case "3":
-                        SendMessage("\nEnter the number of questions to generate: ");
-                        int numQuestions = Convert.ToInt32(await ReadLineAsync());
-                        await generateQuestionsAndChat(numQuestions);
-                        break;
-                    case "4":
-                        SendMessage("\nEnter the number of questions to generate: ");
-                        numQuestions = Convert.ToInt32(await ReadLineAsync());
-                        await generateQuestions(numQuestions);
-                        break;
-                    case "5":
-                        await downloadModel();
-                        break;
-                    case "6":
-                        await loadDifferentModel();
-                        break;
-                    case "7":
-                        quit();
-                        return;
-                    default:
-                        SendMessage("\nInvalid option, please try again.\n");
-                        break;
-                }
-            }
+            return Console.ReadLine();
         }
     }
 }
+
