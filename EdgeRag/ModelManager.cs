@@ -76,7 +76,7 @@ namespace EdgeRag
             #if RELEASECPU
                 // CPU initialization
                 IOManager.SendMessage("Running in CPU mode, no CUDA checks required.");
-                    numGpuLayers = 0;
+                    gpuLayerCount = 0;
             #endif
 
             CreateModelParams();
