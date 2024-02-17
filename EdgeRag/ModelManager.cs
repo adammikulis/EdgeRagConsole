@@ -10,7 +10,7 @@ namespace EdgeRag
     public class ModelManager
     {
         private string modelDirectoryPath;
-        private const string defaultModelUrl = "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q2_K.gguf"; // Ensures there will always be a model available
+        private const string defaultModelUrl = "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q2_K.gguf";
         private uint contextSize;
         private int numGpuLayers;
         private uint numCpuThreads;

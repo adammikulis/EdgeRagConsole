@@ -154,8 +154,9 @@ namespace EdgeRag
             {
                 return (prompt, new long[0], new double[0]);
             }
-
-            var queryEmbeddings = await databaseManager.GenerateEmbeddingsAsync(prompt);
+            
+            // prompt += await InteractWithModelAsync($"As the user, make sure this has complete sentences and correct grammar: {prompt}", 64, 0.5f, false); // This increases the size of the user's prompt for ideally better matching
+            var queryEmbeddings = await databaseManager.GenerateEmbeddingsAsync($"{prompt}");
             List<Tuple<double, long, string>> scoresIncidents = new List<Tuple<double, long, string>>();
 
             foreach (DataRow row in vectorDatabase.Rows)

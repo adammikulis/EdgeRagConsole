@@ -38,7 +38,7 @@ namespace EdgeRag
             return await Task.Run(() => Console.ReadLine());
         }
 
-        public static async Task RunMenuAsync(Func<Task> chat, Func<Task> chatUsingDatabase, Func<int, Task> generateQuestionsAndChat, Func<int, Task> generateQuestions, Action quit)
+        public static async Task RunMenuAsync(Func<Task> chat, Func<Task> chatUsingDatabase, Func<int, Task> generateQuestionsAndChat, Func<int, Task> generateQuestions, Func<Task> downloadModel, Action quit)
         {
             while (true)
             {
@@ -47,7 +47,8 @@ namespace EdgeRag
                 SendMessage("\n2. Chat using Database");
                 SendMessage("\n3. Generate Questions and Chat using Database");
                 SendMessage("\n4. Generate Questions and Quit");
-                SendMessage("\n5. Quit");
+                SendMessage("\n5. Download Model");
+                SendMessage("\n6. Quit");
                 SendMessage("\nSelect an option: ");
 
                 var option = await ReadLineAsync();
@@ -60,20 +61,23 @@ namespace EdgeRag
                         await chatUsingDatabase();
                         break;
                     case "3":
-                        SendMessage("Enter the number of questions to generate: ");
+                        SendMessage("\nEnter the number of questions to generate: ");
                         int numQuestions = Convert.ToInt32(await ReadLineAsync());
                         await generateQuestionsAndChat(numQuestions);
                         break;
                     case "4":
-                        SendMessage("Enter the number of questions to generate: ");
+                        SendMessage("\nEnter the number of questions to generate: ");
                         numQuestions = Convert.ToInt32(await ReadLineAsync());
                         await generateQuestions(numQuestions);
                         break;
                     case "5":
+                        await downloadModel();
+                        break;
+                    case "6":
                         quit();
                         return;
                     default:
-                        SendMessage("Invalid option, please try again.");
+                        SendMessage("\nInvalid option, please try again.\n");
                         break;
                 }
             }

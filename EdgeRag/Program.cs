@@ -15,6 +15,7 @@ namespace EdgeRag
         {
             IOManager.OnOutputMessage += Console.Write;
 
+            string defaultModelUrl = "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q2_K.gguf";
             string modelDirectory = @"models";
             string projectDirectory = AppDomain.CurrentDomain.BaseDirectory;
             string modelDirectoryPath = Path.Combine(projectDirectory, modelDirectory);
@@ -58,9 +59,14 @@ namespace EdgeRag
                 await pipelineManager.syntheticDataGenerator.GenerateITDataPipeline(numQuestions);
                 Environment.Exit(0);
             },
+            downloadModel: async () => {
+                await DownloadManager.DownloadModelAsync("mistral", modelDirectoryPath);
+            },
             quit: () => {
                 Environment.Exit(0);
-            });
+            }
+);
+
         }
     }
 }

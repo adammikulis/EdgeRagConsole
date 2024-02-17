@@ -12,42 +12,38 @@ namespace EdgeRag
         {
         }
 
-        public static async Task<string> GetModelDownloadURL(string modelType)
-        {
-            var quants = new List<string> { "Q2_K", "Q3_K_M", "Q4_K_M", "Q5_K_M", "Q6_K", "Q8_0" };
-            IOManager.SendMessage("Choose a quantization (lower = smaller model):\n");
-            for (int i = 0; i < quants.Count; i++)
-            {
-                IOManager.SendMessage($"{i + 1}. {quants[i]}\n");
-            }
-            var modelQuantIndex = await IOManager.ReadLineAsync(); // Assuming this returns the index as string
-            int index;
-            if (int.TryParse(modelQuantIndex, out index) && index > 0 && index <= quants.Count)
-            {
-                var modelQuant = quants[index - 1];
-                if (modelType == "mistral")
-                {
-                    return $"{mistralURLPath}{modelQuant}.gguf";
-                }
-            }
-            return "";
-        }
-
-        public static async Task DownloadModelAsync(string url, string destinationFolder)
+        public static async Task DownloadModelAsync(string modelType, string destinationFolder)
         {
             using (HttpClient httpClient = new HttpClient())
             {
                 try
                 {
                     int bufferSize = 8192;
-                    // Extracting the file name from the URL
-                    string fileName = Path.GetFileName(url);
+                    string url = "";
+                    
+                    var quants = new List<string> { "Q2_K", "Q3_K_M", "Q4_K_M", "Q5_K_M", "Q6_K", "Q8_0" };
+                    IOManager.SendMessage("Choose a quantization (lower = smaller model):\n");
+                    for (int i = 0; i < quants.Count; i++)
+                    {
+                        IOManager.SendMessage($"{i + 1}. {quants[i]}\n");
+                    }
+                    var modelQuantIndex = await IOManager.ReadLineAsync();
+                    int index;
+                    if (int.TryParse(modelQuantIndex, out index) && index > 0 && index <= quants.Count)
+                    {
+                        var modelQuant = quants[index - 1];
+                        if (modelType == "mistral")
+                        {
+                            url = $"{mistralURLPath}{modelQuant}.gguf";
+                        }
+                    }
 
+                    string fileName = Path.GetFileName(url);
                     // Setting the full destination path
                     string destinationPath = Path.Combine(destinationFolder, fileName);
 
                     // Download the file
-                    IOManager.SendMessage($"\n\nDownloading {fileName} from {url} to {destinationFolder}\n\n");
+                    IOManager.SendMessage($"\nDownloading {fileName} from {url} to {destinationFolder}\n\n");
                     HttpResponseMessage response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
                     response.EnsureSuccessStatusCode();
 
@@ -56,8 +52,7 @@ namespace EdgeRag
                     int readBytes;
                     double lastProgress = 0;
 
-                    using (Stream contentStream = await response.Content.ReadAsStreamAsync(),
-                                  fileStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize, true))
+                    using (Stream contentStream = await response.Content.ReadAsStreamAsync(), fileStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize, true))
                     {
                         byte[] buffer = new byte[bufferSize];
 
@@ -69,10 +64,9 @@ namespace EdgeRag
                             // Update progress for every 1% increase or more
                             if (progress - lastProgress >= 0.01)
                             {
-                                IOManager.SendMessage($"\rDownload progress: {progress * 100:0.00}%");
+                                IOManager.SendMessage($"\rDownload progress: {progress * 100:0}%");
                                 lastProgress = progress;
                             }
-                            
                         }
                     }
 
@@ -80,7 +74,7 @@ namespace EdgeRag
                 }
                 catch (Exception ex)
                 {
-                    IOManager.SendMessage("Error downloading file: " + ex.Message);
+                    IOManager.SendMessage("\nError downloading file: " + ex.Message);
                 }
             }
         }
