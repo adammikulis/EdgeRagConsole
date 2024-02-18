@@ -90,7 +90,7 @@
 
         public static void DisplayGraphicalScores(long[] incidentNumbers, double[] scores)
         {
-            SendMessageLine("Most similar tickets:");
+            SendMessageLine("Most similar tickets:\t");
             for (int i = 0; i < incidentNumbers.Length && i < 3; i++)
             {
                 long incidentNumber = incidentNumbers[i];
@@ -98,7 +98,7 @@
                 int starsCount = (int)Math.Round(score * maxStars);
                 string stars = new string('*', starsCount).PadRight(maxStars, '-');
 
-                SendMessageLine($"Incident {incidentNumber}: Similarity: {score:F2} [{stars}]");
+                SendMessageLine($"Incident\t{incidentNumber}: \tSimilarity: {score:F2} [{stars}]");
             }
         }
 

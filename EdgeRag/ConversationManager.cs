@@ -1,4 +1,5 @@
 ﻿using System.Data;
+using System.Text;
 using LLama;
 using LLama.Common;
 
@@ -117,13 +118,16 @@ namespace EdgeRag
                 if (useDatabaseForChat)
                 {
                     var summarizedResult = await QueryDatabase(userInput, 5, 3);
-                    string response = await InteractWithModelAsync($"Solve {userInput} with {summarizedResult}", maxTokens, averageTemperature, false);
-                    IOManager.SendMessage(response + "\n");
+                    summarizedResult.Replace(userInput, "");
+                    string response = await InteractWithModelAsync($"Solve {userInput} with your existing knowledge and {summarizedResult}", maxTokens, averageTemperature, false);
+                    response.Replace(userInput, "").Replace(summarizedResult, "");
+                    IOManager.SendMessageLine(response);
                 }
                 else
                 {
                     string response = await InteractWithModelAsync(userInput, maxTokens, averageTemperature, false);
-                    IOManager.SendMessage(response + "\n");
+                    response.Replace(userInput, "");
+                    IOManager.SendMessageLine(response);
                 }
             }
         }
@@ -163,9 +167,10 @@ namespace EdgeRag
         // This is the method to turn a prompt into embeddings, match to the database, and then return the original solution
         public async Task<string> QueryDatabase(string prompt, int topMatchesDisplayed, int topMatchesSummarized)
         {
+            IOManager.ClearAndPrintHeading("Chatbot - Using Database");
             if (vectorDatabase.Rows.Count == 0)
             {
-                return (prompt);
+                return prompt;
             }
 
             var queryEmbeddings = await databaseManager.GenerateEmbeddingsAsync(prompt);
@@ -182,30 +187,34 @@ namespace EdgeRag
 
             if (scoresIncidents.Count == 0)
             {
-                return (prompt);
+                IOManager.SendMessageLine("No matches found! Using standard model response:");
+                return prompt;
             }
-            var topMatches = scoresIncidents.OrderByDescending(s => s.Item1).Take(topMatchesDisplayed).ToList();
-            long[] incidentNumbers = topMatches.Select(m => m.Item2).ToArray();
-            double[] scores = topMatches.Select(m => m.Item1).ToArray();
 
-            IOManager.DisplayGraphicalScores(incidentNumbers, scores);
+            // Display top matches
+            var topMatchesForDisplay = scoresIncidents.OrderByDescending(s => s.Item1).Take(topMatchesDisplayed).ToList();
+            long[] incidentNumbersForDisplay = topMatchesForDisplay.Select(m => m.Item2).ToArray();
+            double[] scoresForDisplay = topMatchesForDisplay.Select(m => m.Item1).ToArray();
 
+            IOManager.SendMessageLine($"\nClosest ticket matches for: {prompt}\n\n");
+            IOManager.DisplayGraphicalScores(incidentNumbersForDisplay, scoresForDisplay);
 
-            string summaryRequest = $"Solve {prompt} with: ";
-
-            // Allows for different amount of tickets displayed vs actually summarized
-            for (int i = 0; i < topMatchesSummarized && i < topMatches.Count; i++)
+            // Prepare summary from top summarized matches
+            var topMatchesForSummary = scoresIncidents.OrderByDescending(s => s.Item1).Take(topMatchesSummarized).ToList();
+            // Initialize StringBuilder for efficient string manipulation
+            StringBuilder summaryRequestBuilder = new StringBuilder($"Solve {prompt} with: ");
+            foreach (var (_, _, originalText) in topMatchesForSummary)
             {
-                var (_, _, originalText) = topMatches[i];
-                summaryRequest += $"{originalText} ";
+                summaryRequestBuilder.Append($"{originalText} ");
             }
-
-            string summary = await InteractWithModelAsync(summaryRequest, maxTokens / 8, 0.5f, true); // Internal dialog
+            string summaryRequest = summaryRequestBuilder.ToString();
+            string summary = await InteractWithModelAsync(summaryRequest, maxTokens / 8, 0.5f, true); // Assuming this is an async method you've defined
             summary = CleanUpString(summary);
-            summary = summary.Replace(summaryRequest, "");
-            summary = summary.Replace(prompt, "");
+            summary = summary.Replace(summaryRequest, "").Replace(prompt, "");
 
-            return (summary);
+            return summary;
+
         }
+
     }
 }

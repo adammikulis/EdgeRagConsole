@@ -66,14 +66,14 @@ namespace EdgeRag
 
         private string SelectRandomTheme()
         {
-            string[] themes = { "a specific Apple device", "a specific Android device", "a specific Windows device", "a specific printer or copier", "a specific networking device", "a specific piece of software", "a specific piece of tech hardware" };
+            string[] themes = { "specific Apple product", "specific Android device", "specific Windows device", "specific printer or copier", "specific networking device", "specific Adobe product", "specific Microsoft product", "specific piece of software", "specific piece of tech hardware" };
             Random rand = new Random();
             return themes[rand.Next(themes.Length)];
         }
 
         public async Task GenerateITDataPipeline()
         {
-            IOManager.ClearAndPrintHeading("Synthetic Ticket Generation");
+            IOManager.ClearAndPrintHeading("Fake Support Ticket Generation");
             IOManager.SendMessageLine("\nChoose a number:\n1: View tickets as they generate\n2. Silent ticket generation");
             int choice = Convert.ToInt32(IOManager.ReadLine());
             bool internalDialog = choice == 1 ? false : true;
@@ -90,6 +90,7 @@ namespace EdgeRag
 
             for (int i = 0; i < numQuestions; i++)
             {
+                IOManager.ClearAndPrintHeading("Synthetic Ticket Generation");
                 currentIncidentNumber++;
                 IOManager.SendMessageLine($"\nGenerating item {currentIncidentNumber}...");
                 string selectedTheme = SelectRandomTheme();
@@ -98,22 +99,19 @@ namespace EdgeRag
                 newRow["incidentNumber"] = currentIncidentNumber;
 
                 // Sequentially generate and set the content, passing previous content as context (this is what LangChain does)
-                string incidentDetailsPrompt = "Describe a specific tech issue about: ";
+                string incidentDetailsPrompt = "Pretend you are the user having a tech issue with your ";
                 incidentDetails = await conversationManager.InteractWithModelAsync($"{incidentDetailsPrompt} {selectedTheme}", maxTokens / 16, userTemperature, internalDialog);
-                incidentDetails = incidentDetails.Replace(incidentDetailsPrompt, ""); // Always remove previous content after generating a response to avoid duplicated tokens
-                incidentDetails = incidentDetails.Replace(selectedTheme, "");
+                incidentDetails = incidentDetails.Replace(incidentDetailsPrompt, "").Replace(selectedTheme, ""); // Always remove previous content after generating a response to avoid duplicated tokens
                 incidentDetails = conversationManager.CleanUpString(incidentDetails);
 
                 string supportResponsePrompt = "Try to solve this tech issue: ";
                 supportResponse = await conversationManager.InteractWithModelAsync($"{supportResponsePrompt} {incidentDetails}", maxTokens / 8, supportTemperature, internalDialog);
-                supportResponse = supportResponse.Replace(supportResponsePrompt, "");
-                supportResponse = supportResponse.Replace(incidentDetails, "");
+                supportResponse = supportResponse.Replace(supportResponsePrompt, "").Replace(incidentDetails, "");
                 supportResponse = conversationManager.CleanUpString(supportResponse);
 
                 string incidentSolutionPrompt = "Choose the most likely solution from: ";
                 incidentSolution = await conversationManager.InteractWithModelAsync($"{incidentSolutionPrompt} {supportResponse}", maxTokens / 4, userTemperature, internalDialog);
-                incidentSolution = incidentSolution.Replace(incidentSolutionPrompt, "");
-                incidentSolution = incidentSolution.Replace(supportResponse, "");
+                incidentSolution = incidentSolution.Replace(incidentSolutionPrompt, "").Replace(supportResponse, "");
                 incidentSolution = conversationManager.CleanUpString(incidentSolution);
 
                 // Assign generated content to the newRow
@@ -121,7 +119,7 @@ namespace EdgeRag
                 newRow["supportResponse"] = supportResponse;
                 newRow["incidentSolution"] = incidentSolution;
 
-                // Generate embeddings for the incidentDetails
+                // Generate embeddings for the combined incident details and solution
                 double[] embeddings = await databaseManager.GenerateEmbeddingsAsync(incidentDetails + " " + incidentSolution);
                 newRow[modelType] = embeddings;
 
