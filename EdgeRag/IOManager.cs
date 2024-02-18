@@ -75,10 +75,10 @@
         public static void PrintCudaInitialization()
         {
             ClearAndPrintHeading("CUDA Setup -- GPU Acceleration");
-            SendMessage("\nCUDA 12.1 is installed, GPU inference enabled! Set the number of layers loaded to GPU based on your VRAM\n\n" +
+            SendMessage("\nCUDA 12.1 is installed, GPU inference enabled! Set the number of layers loaded to GPU based on your VRAM\n" +
                 "Set GpuLayerCount to -1 to move the entire model to VRAM, or 0 for cpu-only.\n\n" +
                 "If you get an error when loading the model, reduce the number of layers.\n\n" +
-                "How many layers to GPU? (range: -1 to 33): ");
+                "How many layers to GPU? (range: -1 to 33):\n");
         }
 
         public static void PrintCudaError()

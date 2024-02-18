@@ -91,7 +91,7 @@ namespace EdgeRag
             for (int i = 0; i < numQuestions; i++)
             {
                 currentIncidentNumber++;
-                IOManager.SendMessage($"Generating item {currentIncidentNumber}...\n");
+                IOManager.SendMessageLine($"\nGenerating item {currentIncidentNumber}...");
                 string selectedTheme = SelectRandomTheme();
 
                 DataRow newRow = vectorDatabase.NewRow();
@@ -102,27 +102,24 @@ namespace EdgeRag
                 incidentDetails = await conversationManager.InteractWithModelAsync($"{incidentDetailsPrompt} {selectedTheme}", maxTokens / 16, userTemperature, internalDialog);
                 incidentDetails = incidentDetails.Replace(incidentDetailsPrompt, ""); // Always remove previous content after generating a response to avoid duplicated tokens
                 incidentDetails = incidentDetails.Replace(selectedTheme, "");
+                incidentDetails = conversationManager.CleanUpString(incidentDetails);
 
                 string supportResponsePrompt = "Try to solve this tech issue: ";
                 supportResponse = await conversationManager.InteractWithModelAsync($"{supportResponsePrompt} {incidentDetails}", maxTokens / 8, supportTemperature, internalDialog);
                 supportResponse = supportResponse.Replace(supportResponsePrompt, "");
                 supportResponse = supportResponse.Replace(incidentDetails, "");
+                supportResponse = conversationManager.CleanUpString(supportResponse);
 
                 string incidentSolutionPrompt = "Choose the most likely solution from: ";
                 incidentSolution = await conversationManager.InteractWithModelAsync($"{incidentSolutionPrompt} {supportResponse}", maxTokens / 4, userTemperature, internalDialog);
                 incidentSolution = incidentSolution.Replace(incidentSolutionPrompt, "");
                 incidentSolution = incidentSolution.Replace(supportResponse, "");
-
-                string summarizedIncidentSolutionPrompt = "Summarize: ";
-                string summarizedIncident = await conversationManager.InteractWithModelAsync($"{summarizedIncidentSolutionPrompt} {incidentSolution}", maxTokens / 8, userTemperature, internalDialog);
-                summarizedIncident = summarizedIncident.Replace(summarizedIncidentSolutionPrompt, "");
-                summarizedIncident = summarizedIncident.Replace(incidentSolution, "");
+                incidentSolution = conversationManager.CleanUpString(incidentSolution);
 
                 // Assign generated content to the newRow
                 newRow["incidentDetails"] = incidentDetails;
                 newRow["supportResponse"] = supportResponse;
                 newRow["incidentSolution"] = incidentSolution;
-                newRow["summarizedIncident"] = summarizedIncident;
 
                 // Generate embeddings for the incidentDetails
                 double[] embeddings = await databaseManager.GenerateEmbeddingsAsync(incidentDetails + " " + incidentSolution);

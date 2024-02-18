@@ -42,7 +42,6 @@ namespace EdgeRag
                     ("incidentDetails", typeof(string)),
                     ("supportResponse", typeof(string)),
                     ("incidentSolution", typeof(string)),
-                    ("summarizedIncident", typeof(string)),
                     (modelManager.selectedModelType, typeof(double[]))
                 };
 

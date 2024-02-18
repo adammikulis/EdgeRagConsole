@@ -15,7 +15,7 @@ namespace EdgeRag
         private string[] antiPrompts;
         private const float averageTemperature = 0.5f;
         public int maxTokens;
-        private int numTopMatches;
+        private const int numTopMatches = 5;
         
 
         public InteractiveExecutor? executor;
@@ -23,7 +23,7 @@ namespace EdgeRag
 
         public event Action<string> OnMessage = delegate { };
 
-        public ConversationManager(ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, string[] systemMessages, string[] antiPrompts, int numTopMatches)
+        public ConversationManager(ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, string[] systemMessages, string[] antiPrompts)
         {
             this.databaseManager = databaseManager;
             this.vectorDatabase = databaseManager.GetVectorDatabase();
@@ -33,14 +33,13 @@ namespace EdgeRag
             this.systemMessages = systemMessages;
             this.databaseManager = databaseManager;
             this.selectedModelType = modelManager.selectedModelType;
-            this.numTopMatches = numTopMatches;
             systemMessageNumber = 0;
 
         }
 
-        public static async Task<ConversationManager> CreateAsync(ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, string[] systemMessages, string[] antiPrompts, int numTopMatches)
+        public static async Task<ConversationManager> CreateAsync(ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, string[] systemMessages, string[] antiPrompts)
         {
-            var conversationManager = new ConversationManager(modelManager, databaseManager, maxTokens, systemMessages, antiPrompts, numTopMatches);
+            var conversationManager = new ConversationManager(modelManager, databaseManager, maxTokens, systemMessages, antiPrompts);
             await conversationManager.InitializeAsync();
             return conversationManager;
         }
@@ -97,22 +96,28 @@ namespace EdgeRag
                 
             if (session == null) return;
 
-            IOManager.SendMessage("Chat session started, please input your query:\n");
+            IOManager.SendMessageLine("\nChat session started, please input your query (back to go back and quit to quit):");
             while (true)
             {
                 string userInput = IOManager.ReadLine();
 
-                if (string.IsNullOrWhiteSpace(userInput) || userInput.ToLower() == "exit" || userInput.ToLower() == "back")
+                if (string.IsNullOrWhiteSpace(userInput) || userInput.ToLower() == "back")
                 {
                     IOManager.SendMessage("Exiting chat session.");
                     break;
                 }
 
+                if (userInput.ToLower() == "quit")
+                {
+                    modelManager.Dispose();
+                    System.Environment.Exit(0);
+                }
+
+
                 if (useDatabaseForChat)
                 {
-                    var withDatabaseResponse = await QueryDatabase(userInput);
-                    IOManager.DisplayGraphicalScores(withDatabaseResponse.incidentNumbers, withDatabaseResponse.scores);
-                    string response = await InteractWithModelAsync(withDatabaseResponse.summarizedText, maxTokens, averageTemperature, false);
+                    var summarizedResult = await QueryDatabase(userInput, 5, 3);
+                    string response = await InteractWithModelAsync($"Solve {userInput} with {summarizedResult}", maxTokens, averageTemperature, false);
                     IOManager.SendMessage(response + "\n");
                 }
                 else
@@ -129,7 +134,6 @@ namespace EdgeRag
                 .Replace("AI:", "")
                 .Replace("User:", "")
                 .Replace("Support:", "")
-                .Replace("\n", " ")
                 .Replace("\r", " ")
                 .Replace("     ", " ")
                 .Replace("    ", " ")
@@ -142,7 +146,6 @@ namespace EdgeRag
 
         public async Task<string> InteractWithModelAsync(string prompt, int maxTokens, float temperature, bool internalChat)
         {
-            if (session == null) return "Session still initializing, please wait.\n";
             prompt = $"{systemMessages[systemMessageNumber]}{prompt}".Trim();
 
             await foreach (var text in session.ChatAsync(new ChatHistory.Message(AuthorRole.User, prompt), new InferenceParams { MaxTokens = maxTokens, Temperature = temperature, AntiPrompts = antiPrompts }))
@@ -158,11 +161,11 @@ namespace EdgeRag
         }
 
         // This is the method to turn a prompt into embeddings, match to the database, and then return the original solution
-        public async Task<(string summarizedText, long[] incidentNumbers, double[] scores)> QueryDatabase(string prompt)
+        public async Task<string> QueryDatabase(string prompt, int topMatchesDisplayed, int topMatchesSummarized)
         {
             if (vectorDatabase.Rows.Count == 0)
             {
-                return (prompt, new long[0], new double[0]);
+                return (prompt);
             }
 
             var queryEmbeddings = await databaseManager.GenerateEmbeddingsAsync(prompt);
@@ -179,28 +182,30 @@ namespace EdgeRag
 
             if (scoresIncidents.Count == 0)
             {
-                return (prompt, new long[0], new double[0]);
+                return (prompt);
             }
-
-            int numSummarizedIncidents = 1; // Set the number of incidents to summarize
-            var topMatches = scoresIncidents.OrderByDescending(s => s.Item1).Take(numTopMatches).ToList();
+            var topMatches = scoresIncidents.OrderByDescending(s => s.Item1).Take(topMatchesDisplayed).ToList();
             long[] incidentNumbers = topMatches.Select(m => m.Item2).ToArray();
             double[] scores = topMatches.Select(m => m.Item1).ToArray();
 
-            string summaryRequest = $"Choose the most relevant solution for {prompt}: ";
+            IOManager.DisplayGraphicalScores(incidentNumbers, scores);
 
-            for (int i = 0; i < numSummarizedIncidents && i < topMatches.Count; i++)
+
+            string summaryRequest = $"Solve {prompt} with: ";
+
+            // Allows for different amount of tickets displayed vs actually summarized
+            for (int i = 0; i < topMatchesSummarized && i < topMatches.Count; i++)
             {
                 var (_, _, originalText) = topMatches[i];
                 summaryRequest += $"{originalText} ";
             }
 
-            string summary = await InteractWithModelAsync(summaryRequest, maxTokens / 16, 0.5f, true); // Internal dialog
+            string summary = await InteractWithModelAsync(summaryRequest, maxTokens / 8, 0.5f, true); // Internal dialog
             summary = CleanUpString(summary);
             summary = summary.Replace(summaryRequest, "");
             summary = summary.Replace(prompt, "");
 
-            return (summary, incidentNumbers, scores);
+            return (summary);
         }
     }
 }

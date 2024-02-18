@@ -31,7 +31,6 @@ namespace EdgeRag
                 Directory.CreateDirectory(dataDirectoryPath);
             }
 
-            int numTopMatches = 3; // This is when querying the database of facts, increase to compare to more tickets
             string[] systemMessages = { $"" }; // Set this if you would like the LLM to always get a system message first
 
             uint seed = 0;
@@ -43,7 +42,7 @@ namespace EdgeRag
             int questionBatchSize = 32; // This allows generated questions to be saved in batches to JSON instead of at the very ened
 
             // The PipelineManager handles all setup/initalization. It loads the ModelManager, DatabaseManager, ConversationManager, and SyntheticDataGenerator (in that order)
-            var pipelineManager = await PipelineManager.CreateAsync(modelDirectoryPath, dataDirectoryPath, numTopMatches, seed, contextSize, maxTokens, numCpuThreads, temperature, systemMessages, antiPrompts, questionBatchSize);
+            var pipelineManager = await PipelineManager.CreateAsync(modelDirectoryPath, dataDirectoryPath, seed, contextSize, maxTokens, numCpuThreads, temperature, systemMessages, antiPrompts, questionBatchSize);
 
             // Main menu loop
             while (true)
@@ -94,13 +93,13 @@ namespace EdgeRag
                     // Load different model
                     case "6":
                         pipelineManager.modelManager.Dispose();
-                        pipelineManager = await PipelineManager.CreateAsync(modelDirectoryPath, dataDirectoryPath, numTopMatches, seed, contextSize, maxTokens, numCpuThreads, temperature, systemMessages, antiPrompts, questionBatchSize);
+                        pipelineManager = await PipelineManager.CreateAsync(modelDirectoryPath, dataDirectoryPath, seed, contextSize, maxTokens, numCpuThreads, temperature, systemMessages, antiPrompts, questionBatchSize);
                         break;
                 
                     // Load different database
                     case "7":
                         pipelineManager.databaseManager = await DatabaseManager.CreateAsync(pipelineManager.modelManager, dataDirectoryPath);
-                        pipelineManager.conversationManager = await ConversationManager.CreateAsync(pipelineManager.modelManager, pipelineManager.databaseManager, maxTokens, systemMessages, antiPrompts, numTopMatches);
+                        pipelineManager.conversationManager = await ConversationManager.CreateAsync(pipelineManager.modelManager, pipelineManager.databaseManager, maxTokens, systemMessages, antiPrompts);
                         pipelineManager.syntheticDataGenerator = await SyntheticDataGenerator.CreateAsync(pipelineManager.modelManager, pipelineManager.databaseManager, pipelineManager.conversationManager, questionBatchSize);
                         break;
                     
