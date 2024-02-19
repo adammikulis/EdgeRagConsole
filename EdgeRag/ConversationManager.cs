@@ -1,4 +1,5 @@
 ﻿// This class loads and manages the conversation aspect, which includes the InteractiveExecutor and ChatSession
+// Database querying happens here
 
 using System.Data;
 using System.Text;
@@ -173,7 +174,7 @@ namespace EdgeRag
             return prompt;
         }
 
-        // This is the method to turn a prompt into embeddings, match to the database, and then return the original solution
+        // This is the method to turn a new incident prompt into embeddings, match to the database, and then return the original incident response/solution
         public async Task<string> QueryDatabase(string prompt, int topMatchesDisplayed, int topMatchesSummarized)
         {
             IOManager.ClearAndPrintHeading("Chatbot - Using Database");
@@ -191,7 +192,7 @@ namespace EdgeRag
                 var factEmbeddings = (double[])row[modelManager.selectedModelType];
                 double score = VectorSearchUtility.CosineSimilarity(queryEmbeddings, factEmbeddings);
                 long incidentNumber = Convert.ToInt64(row["incidentNumber"]);
-                string originalText = row["incidentSolution"].ToString();
+                string originalText = row["supportResponse"].ToString(); // Could possibly use incidentSolution, but supportResponse seems to have more data
                 scoresIncidents.Add(new Tuple<double, long, string>(score, incidentNumber, originalText));
             }
 

@@ -1,5 +1,6 @@
 ﻿// This class initializes the vector database
 // It needs the current modelManager so it knows what column to add for vector embeddings
+// The actual conversational querying of the database happens in ConversationManager.cs
 // Future iterations will decouple this and instead check for a loaded model before acting on the database
 
 
