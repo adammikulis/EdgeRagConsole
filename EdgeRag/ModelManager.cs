@@ -30,6 +30,7 @@ namespace EdgeRag
             this.seed = seed;
         }
 
+        // Factory method
         public static async Task<ModelManager> CreateAsync(string modelDirectoryPath, uint seed, uint contextSize, uint numCpuThreads)
         {
             var modelManager = new ModelManager(modelDirectoryPath, seed, contextSize, numCpuThreads);
@@ -47,7 +48,7 @@ namespace EdgeRag
             while (!validModelSelected)
             {
                 IOManager.ClearConsole();
-                validModelSelected = DisplayAndLoadModels(filePaths, validModelSelected);
+                validModelSelected = DisplayAndSelectModel(filePaths, validModelSelected);
             }
 
             // GPU initialization depends on which release user is running
@@ -63,8 +64,8 @@ namespace EdgeRag
                     gpuLayerCount = int.Parse(input);
                     if (gpuLayerCount > 33)
                     {
-                        gpuLayerCount = 33;
-                    }
+                        gpuLayerCount = 33; // This is the maximum layer count llama.cpp uses (1 non-repeating layer and 32 repeating layers)
+                }
                 }
                 else
                 {
@@ -72,6 +73,7 @@ namespace EdgeRag
                 }
             #endif
 
+            // CPU initialization
             #if RELEASECPU
                 // CPU initialization
                 IOManager.SendMessage("Running in CPU mode, no CUDA checks required.");
@@ -82,7 +84,7 @@ namespace EdgeRag
             LoadModelEmbedderContext();
         }
 
-        // Used to manually unload model
+        // Used to manually unload model to free up memory, each of those classes implements IDisposable
         public void Dispose()
         {
             model.Dispose();
@@ -94,12 +96,14 @@ namespace EdgeRag
             context = null;
         }
 
+        // Call the disposal methods
         public void UnloadModel()
         {
             Dispose();
             IOManager.SendMessageLine("Model unloaded successfully.");
         }
 
+        // Method to load a different model is async to not block UI
         public async Task LoadDifferentModelAsync(string modelPath)
         {
             UnloadModel();
@@ -109,6 +113,8 @@ namespace EdgeRag
 
             await InitializeAsync();
         }
+
+        // Loads the model, the embedder, and the context variables (embedder needed to return embeddings and context needed for  later InteractiveExecutor/ChatSession
         private void LoadModelEmbedderContext()
         {
             // Load the model into memory, putting the specified amount of layers to the GPU
@@ -120,7 +126,7 @@ namespace EdgeRag
             // The context is used for the conversation, takes up its own amount of memory (longer context means more usage)
             context = model.CreateContext(modelParams);
             
-            
+            // Inform the user how many layers were moved to the GPU
             IOManager.SendMessage($"Model: {selectedModelName} from {modelDirectoryPath} loaded\n");
             if ((gpuLayerCount == -1) || (gpuLayerCount == maxGpuLayers))
             {
@@ -136,6 +142,7 @@ namespace EdgeRag
             }
         }
 
+        // ModelParams are passed into the intial model loading
         private void CreateModelParams()
         {
             modelParams = new ModelParams(selectedModelPath)
@@ -148,7 +155,8 @@ namespace EdgeRag
             };
         }
 
-        private bool DisplayAndLoadModels(string[] filePaths, bool validModelSelected)
+        // Used for printing out available models for selection
+        private bool DisplayAndSelectModel(string[] filePaths, bool validModelSelected)
         {
             IOManager.ClearAndPrintHeading("Large Language Model Selection");
             IOManager.SendMessageLine($"\nCurrent model directory: {modelDirectoryPath}\n\nAvailable models (choose a number):");
@@ -157,6 +165,7 @@ namespace EdgeRag
                 IOManager.SendMessageLine($"{i + 1}: {Path.GetFileName(filePaths[i])}");
             }
 
+            // Get the user's selection
             if (int.TryParse(IOManager.ReadLine(), out int index) && index >= 1 && index <= filePaths.Length)
             {
                 index -= 1;
@@ -177,6 +186,7 @@ namespace EdgeRag
             return validModelSelected;
         }
 
+        // These needs to be manually updated, should just get linked to maxTokens in the future
         private void DetermineMaxContextSize()
         {
             switch (selectedModelType)
@@ -195,12 +205,13 @@ namespace EdgeRag
                     contextSize = 65536;
                     break;
                 default:
-                    contextSize = 4096;
+                    contextSize = 2048;
                     break;
             }
             IOManager.SendMessage($"{selectedModelType} detected, context size set to {contextSize}\n");
         }
 
+        // Starts the download model process if there are none saved in the directory
         private async Task CheckAndDownloadModelIfNeeded()
         {
             var filePaths = Directory.GetFiles(modelDirectoryPath);
@@ -220,6 +231,7 @@ namespace EdgeRag
             }
         }
 
+        // Checks for the model directory and creates it if it doesn't exist
         private void CheckDirectoryExists()
         {
             if (!Directory.Exists(modelDirectoryPath))

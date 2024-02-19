@@ -1,4 +1,7 @@
-﻿namespace EdgeRag
+﻿// This class manages the life-cycle of the application and initializes the various managers
+// Future updates will decouple the model and database managers moore
+
+namespace EdgeRag
 {
     public class PipelineManager
     {
@@ -23,7 +26,7 @@
             // Initialize SyntheticDataGenerator
             pipelineManager.syntheticDataGenerator = await SyntheticDataGenerator.CreateAsync(pipelineManager.modelManager, pipelineManager.databaseManager, pipelineManager.conversationManager, questionBatchSize);
 
-            return pipelineManager;
+            return pipelineManager; // This is the main variable that gets acted on in the menu loop, contains all information
         }
     }
 }

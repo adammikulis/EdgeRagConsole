@@ -1,4 +1,6 @@
-﻿// This class is last to load and combines the model, conversation, and database managers to create synthetic data
+﻿// This class is used to generate fake support tickets that can then be queried by the model
+// It demonstrates two concepts: prompt chaining and knowledge distillation
+// This class is last to load and combines the model, conversation, and database managers to create synthetic data
 // Currently hard-coded to generate tech support data (to match the tech support table) but will be generalized later
 
 using System.Data;
@@ -35,6 +37,7 @@ namespace EdgeRag
             json = "";
         }
 
+        // Factory method
         public static async Task<SyntheticDataGenerator> CreateAsync(ModelManager modelManager, DatabaseManager databaseManager, ConversationManager conversationManager, int questionBatchSize)
         {
             var syntheticDataGenerator = new SyntheticDataGenerator(modelManager, databaseManager, conversationManager, questionBatchSize);
@@ -42,6 +45,7 @@ namespace EdgeRag
             return syntheticDataGenerator;
         }
 
+        // Initialization method
         public async Task InitializeAsync()
         {
             await Task.Run(async () =>
@@ -64,6 +68,7 @@ namespace EdgeRag
             });
         }
 
+        // Add/change themes for a different variety of tickets
         private string SelectRandomTheme()
         {
             string[] themes = { "specific Apple product", "specific Android device", "specific Windows device", "specific printer or copier", "specific networking device", "specific Adobe product", "specific Microsoft product", "specific piece of software", "specific piece of tech hardware" };
@@ -71,6 +76,7 @@ namespace EdgeRag
             return themes[rand.Next(themes.Length)];
         }
 
+        // This is the main method of this class and it chains together prompts. Future iterations will make this process recursive
         public async Task GenerateITDataPipeline()
         {
             IOManager.ClearAndPrintHeading("Fake Support Ticket Generation");
@@ -85,8 +91,8 @@ namespace EdgeRag
             // Sets a minimum of 1 for questionBatchSize
             questionBatchSize = Math.Max(1, questionBatchSize);
 
-            float supportTemperature = 0.5f; // Lower is more deterministic
-            float userTemperature = 0.8f; // Higher is more random
+            float supportTemperature = 0.65f; // Lower is more deterministic/repetitive
+            float userTemperature = 0.85f; // Higher is more random
 
             for (int i = 0; i < numQuestions; i++)
             {

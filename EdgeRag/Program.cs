@@ -12,7 +12,7 @@ namespace EdgeRag
     {
         static async Task Main(string[] args)
         {
-            IOManager.OnOutputMessage += Console.Write;
+            IOManager.OnMessage += Console.Write;
             IOManager.PrintIntroMessage();
 
             string modelDirectory = @"models";
@@ -33,13 +33,13 @@ namespace EdgeRag
 
             string[] systemMessages = { $"" }; // Set this if you would like the LLM to always get a system message first
 
-            uint seed = 0;
+            uint seed = 2;
             uint contextSize = 0; // Set to 0 to use the maximum allowed for whatever model type you choose
             int maxTokens = 0; // Set to 0 to use the maximum allowed for whatever model type you choose
             uint numCpuThreads = 8; // Use a number that matches your physical cores for best performance
             float temperature = 0.5f; // Lower is more deterministic, higher is more random
             string[] antiPrompts = { "<end>" }; // This is what the LLM emits to stop the message, do not change
-            int questionBatchSize = 32; // This allows generated questions to be saved in batches to JSON instead of at the very ened
+            int questionBatchSize = 8; // This allows generated questions to be saved in batches to JSON instead of at the very end
 
             // The PipelineManager handles all setup/initalization. It loads the ModelManager, DatabaseManager, ConversationManager, and SyntheticDataGenerator (in that order)
             var pipelineManager = await PipelineManager.CreateAsync(modelDirectoryPath, dataDirectoryPath, seed, contextSize, maxTokens, numCpuThreads, temperature, systemMessages, antiPrompts, questionBatchSize);

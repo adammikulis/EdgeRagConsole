@@ -1,15 +1,14 @@
-﻿namespace EdgeRag
+﻿// This class is for platform-agnostic IO to allow to porting to Godot
+// Using flags, this will allow for a common code-base to be used for multiple apps
+
+namespace EdgeRag
 {
-    public class IOManager
+    public static class IOManager
     {
-        private const int maxStars = 75; // Used for similarity match
-        private const int headingTotalWidth = 100;
+        private const int maxStars = 75; // Used for rending similarity match
+        private const int headingTotalWidth = 100; // Used for rendering menu headings
 
-        public static event Action<string> OnOutputMessage;
-
-        private IOManager()
-        {
-        }
+        public static event Action<string> OnMessage;
 
         public static void ClearConsole()
         {
@@ -18,12 +17,13 @@
 
         public static void SendMessage(string message)
         {
-            OnOutputMessage?.Invoke(message);
+            OnMessage?.Invoke(message);
         }
 
+        // Identical functionality to Console.WriteLine
         public static void SendMessageLine(string message)
         {
-            OnOutputMessage?.Invoke(message);
+            OnMessage?.Invoke(message);
             SendMessage("\n");
         }
 
@@ -38,6 +38,7 @@
             ClearConsole();
         }
 
+        // This is printed at the very start of the program
         public static void PrintIntroMessage()
         {
             ClearConsole();
@@ -71,7 +72,7 @@
             PrintHeading(heading);
         }
 
-
+        // Used for GPU configuration
         public static void PrintCudaInitialization()
         {
             ClearAndPrintHeading("CUDA Setup -- GPU Acceleration");
@@ -88,6 +89,7 @@
             Environment.Exit(0);
         }
 
+        // Renders the similarity of documents as a sideways bar graph of stars
         public static void DisplayGraphicalScores(long[] incidentNumbers, double[] scores)
         {
             SendMessageLine("Most similar tickets:\t");
@@ -102,6 +104,7 @@
             }
         }
 
+        // Allows for input abstraction
         public static string ReadLine()
         {
             return Console.ReadLine();

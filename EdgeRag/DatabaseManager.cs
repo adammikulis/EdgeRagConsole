@@ -1,5 +1,6 @@
 ﻿// This class initializes the vector database
 // It needs the current modelManager so it knows what column to add for vector embeddings
+// Future iterations will decouple this and instead check for a loaded model before acting on the database
 
 
 using System.Data;
@@ -16,6 +17,7 @@ namespace EdgeRag
         public string[] databaseTypes;
         private List<(string Name, Type DataType)> techSupportColumns;
 
+
         public DatabaseManager(ModelManager modelManager, string dataDirectoryPath)
         {
             this.dataDirectoryPath = dataDirectoryPath;
@@ -25,6 +27,8 @@ namespace EdgeRag
             string dataFileName = "";
 
         }
+
+        // Factory method
         public static async Task<DatabaseManager> CreateAsync(ModelManager modelManager, string dataDirectoryPath)
         {
             var databaseManager = new DatabaseManager(modelManager, dataDirectoryPath);
@@ -32,10 +36,12 @@ namespace EdgeRag
             return databaseManager;
         }
 
+        // Initialization method
         public async Task InitializeAsync()
         {
             await Task.Run(async () =>
             {
+                // Future iterations will allow for custom datatables
                 techSupportColumns = new List<(string Name, Type DataType)>
                 {
                     ("incidentNumber", typeof(long)),
@@ -61,6 +67,7 @@ namespace EdgeRag
             });
         }
 
+        // Prevents adding data to columns that don't yet exist
         private void AddDatabaseColumns(List<(string Name, Type DataType)> columns)
         {
             foreach (var column in columns)
@@ -71,6 +78,8 @@ namespace EdgeRag
                 }
             }
         }
+
+
         private async Task CreateNewDatabase()
         {
             IOManager.ClearConsole();
@@ -121,7 +130,7 @@ namespace EdgeRag
             }
         }
 
-
+        // Uses Newtonsoft.json to load a previously saved database directly to a DataTable. Future iterations will remove this library and do DataTable -> Dictionary -> Json with just System.Text.Json
         private async Task LoadDatabase(string[] jsonFiles)
         {
             IOManager.ClearConsole();
@@ -176,6 +185,7 @@ namespace EdgeRag
             }
         }
 
+        // Used when generating new incidents for an existing database
         public async Task<long> GetHighestIncidentNumberAsync()
         {
             return await Task.Run(() =>
@@ -185,13 +195,14 @@ namespace EdgeRag
             });
         }
 
-        // LLamaEmbedder generates floats which need to be converted to double due to JSON behavior
+        // LLamaEmbedder generates floats which need to be converted to double due to JSON deserialization behavior
         public async Task<double[]> GenerateEmbeddingsAsync(string textToEmbed)
         {
             float[] embeddingsFloat = await modelManager.embedder.GetEmbeddings(textToEmbed);
             double[] embeddingsDouble = embeddingsFloat.Select(f => (double)f).ToArray();
             return embeddingsDouble;
         }
+
 
         public string DataTableToJson(DataTable dataTable)
         {
@@ -200,16 +211,10 @@ namespace EdgeRag
 
         public DataTable JsonToDataTable(string json)
         {
-            try
-            {
-                return JsonConvert.DeserializeObject<DataTable>(json);
-            }
-            catch
-            {
-                return new DataTable();
-            }
+            return JsonConvert.DeserializeObject<DataTable>(json);
         }
 
+        // Async method to write to an external file
         public async Task SaveJsonToFileAsync(string json, string dataFileName)
         {
             string filePath = Path.Combine(dataDirectoryPath, dataFileName);
@@ -222,7 +227,7 @@ namespace EdgeRag
             await File.WriteAllTextAsync(filePath, json);
         }
 
-
+        // Async method to read from an external file
         public async Task<string> ReadJsonFromFileAsync(string filePath)
         {
             return File.Exists(filePath) ? await File.ReadAllTextAsync(filePath) : string.Empty;
