@@ -1,4 +1,5 @@
 ﻿// This class loads and manages the conversation aspect, which includes the InteractiveExecutor and ChatSession
+// You can either chat with the model by itself, or with the model + vector database results
 // Database querying happens here
 
 using System.Data;
@@ -19,7 +20,6 @@ namespace EdgeRag
         private string[] antiPrompts;
         private const float averageTemperature = 0.5f;
         public int maxTokens;
-        private const int numTopMatches = 5;
         
         // These are the last parts to load to make the model functional for conversation
         public InteractiveExecutor? executor;
@@ -96,55 +96,73 @@ namespace EdgeRag
              
             if (session == null) return;
 
-            IOManager.SendMessageLine("\nChat session started, please input your query (back to go back and quit to quit):");
+           
             while (true)
             {
-                string userInput = IOManager.ReadLine();
-
-                if (string.IsNullOrWhiteSpace(userInput) || userInput.ToLower() == "back")
-                {
-                    IOManager.SendMessage("Exiting chat session.");
-                    break;
-                }
-
-                if (userInput.ToLower() == "quit")
-                {
-                    modelManager.Dispose();
-                    System.Environment.Exit(0);
-                }
 
                 // This is where the disctiontion between regular chat and database-enabled chat is made
                 if (useDatabaseForChat)
                 {
+                    IOManager.ClearAndPrintHeading("Chatbot - Using Database");
+                    string userInput = getUserInput();
+                    if (userInput == null) break;
+
+                    // Get the top result(s) from the database
                     var summarizedResult = await QueryDatabase(userInput, 5, 3);
                     summarizedResult.Replace(userInput, "");
                     summarizedResult = CleanUpString(summarizedResult);
-                    
-                    
+
+                    // Get the standard model response
                     string responseNoDB = await InteractWithModelAsync($"Solve {userInput}", maxTokens / 8, averageTemperature, false);
                     responseNoDB.Replace(userInput, "");
                     responseNoDB = CleanUpString(responseNoDB);
-                    string response = await InteractWithModelAsync($"Pick the best solution(s) from {summarizedResult} and {responseNoDB}", maxTokens, averageTemperature, false);
                     
+                    // Have the model combine the two separate troubleshooting steps for a best solution
+                    string response = await InteractWithModelAsync($"Pick the best solution(s) from {summarizedResult} and {responseNoDB}", maxTokens, averageTemperature, false);
                     response = CleanUpString(response);
+                    
                     IOManager.SendMessageLine("Hit a key to continue...");
                     IOManager.AwaitKeypress();
-                    IOManager.ClearAndPrintHeading("Chatbot - Using Database");
                 }
-                
+
                 // No database chat
                 else
                 {
+                    IOManager.ClearAndPrintHeading("Chatbot - No Database");
+                    string userInput = getUserInput();
+                    if (userInput == null) break;
+
                     string response = await InteractWithModelAsync($"Solve {userInput}", maxTokens / 8, averageTemperature, false);
                     response.Replace(userInput, "");
                     response = CleanUpString(response); // Response not yet used but available for future iterations
+                    
                     IOManager.SendMessageLine("Hit a key to continue...");
                     IOManager.AwaitKeypress();
-                    IOManager.ClearAndPrintHeading("Chatbot - No Database");
+                    
                 }
             }
         }
-        
+
+        private string getUserInput()
+        {
+            IOManager.SendMessageLine("\nChat session started, please input your query (back to go back and quit to quit):");
+            string userInput = IOManager.ReadLine();
+
+            if (string.IsNullOrWhiteSpace(userInput) || userInput.ToLower() == "back")
+            {
+                IOManager.SendMessage("Exiting chat session.");
+                return null;
+            }
+
+            if (userInput.ToLower() == "quit")
+            {
+                modelManager.Dispose();
+                System.Environment.Exit(0);
+            }
+
+            return userInput;
+        }
+
         // It is important to clean the data both in and out of the LLM (particularly when chaining responses)
         public string CleanUpString(string input)
         {

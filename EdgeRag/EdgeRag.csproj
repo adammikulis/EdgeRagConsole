@@ -9,11 +9,10 @@
 		<InvariantGlobalization>true</InvariantGlobalization>
 		<Configurations>DebugCPU;DebugCUDA12;ReleaseCPU;ReleaseCUDA12</Configurations>
 		<SelfContained>true</SelfContained>
-		<PublishTrimmed>true</PublishTrimmed>
 		<PublishReadyToRun>true</PublishReadyToRun>
 		<DebugType Condition="'$(Configuration)' == 'ReleaseCPU' or '$(Configuration)' == 'ReleaseCUDA12'">none</DebugType>
 		<Platforms>AnyCPU;x64</Platforms>
-	</PropertyGroup>
+	</PropertyGroup><PublishTrimmed>true</PublishTrimmed>
 
 	<PropertyGroup Condition="'$(Configuration)'=='DebugCPU'">
 		<DefineConstants>RELEASECPU</DefineConstants>
