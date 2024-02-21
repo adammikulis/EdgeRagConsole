@@ -118,9 +118,15 @@ namespace EdgeRag
                 {
                     var summarizedResult = await QueryDatabase(userInput, 5, 3);
                     summarizedResult.Replace(userInput, "");
-                    string response = await InteractWithModelAsync($"Solve {userInput} with your existing knowledge and {summarizedResult}", maxTokens, averageTemperature, false);
-                    response.Replace(userInput, "").Replace(summarizedResult, "");
-                    response = CleanUpString(response); // Response not yet used but available for future iterations
+                    summarizedResult = CleanUpString(summarizedResult);
+                    
+                    
+                    string responseNoDB = await InteractWithModelAsync($"Solve {userInput}", maxTokens / 8, averageTemperature, false);
+                    responseNoDB.Replace(userInput, "");
+                    responseNoDB = CleanUpString(responseNoDB);
+                    string response = await InteractWithModelAsync($"Pick the best solution(s) from {summarizedResult} and {responseNoDB}", maxTokens, averageTemperature, false);
+                    
+                    response = CleanUpString(response);
                     IOManager.SendMessageLine("Hit a key to continue...");
                     IOManager.AwaitKeypress();
                     IOManager.ClearAndPrintHeading("Chatbot - Using Database");
@@ -129,7 +135,7 @@ namespace EdgeRag
                 // No database chat
                 else
                 {
-                    string response = await InteractWithModelAsync(userInput, maxTokens, averageTemperature, false);
+                    string response = await InteractWithModelAsync($"Solve {userInput}", maxTokens / 8, averageTemperature, false);
                     response.Replace(userInput, "");
                     response = CleanUpString(response); // Response not yet used but available for future iterations
                     IOManager.SendMessageLine("Hit a key to continue...");
@@ -148,6 +154,7 @@ namespace EdgeRag
                 .Replace("User:", "")
                 .Replace("Support:", "")
                 .Replace("\r", " ")
+                .Replace("      ", " ")
                 .Replace("     ", " ")
                 .Replace("    ", " ")
                 .Replace("   ", " ")
@@ -183,6 +190,7 @@ namespace EdgeRag
                 return prompt;
             }
 
+            // This is where the user query is turned into embeddings to compare to the DB embeddings
             var queryEmbeddings = await databaseManager.GenerateEmbeddingsAsync(prompt); // Must have EmbeddingMode = true in ModelParams for this to work
             List<Tuple<double, long, string>> scoresIncidents = new List<Tuple<double, long, string>>();
 
