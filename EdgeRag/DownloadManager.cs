@@ -1,14 +1,12 @@
-﻿
-
+﻿// This class is used to download large language models for the user
+// It is currently hard-coded to download models of the Mistral-7B-Instruct-v0.2 variety due to testing/performance
+// Future iterations will allow for llama, mixtral, phi, and other supported model families
 
 namespace EdgeRag
 {
-    public class DownloadManager
+    public static class DownloadManager
     {
         private const string mistralURLPath = "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.";
-        private DownloadManager()
-        {
-        }
 
         // One of the most important methods in the program, uses HttpClient to download a model
         public static async Task DownloadModelAsync(string modelType, string destinationFolder)
@@ -21,8 +19,8 @@ namespace EdgeRag
                     int bufferSize = 8192;
                     string url = "";
 
-                    // This lets the user choose the bit size of the model and returns a full url for downloading
-                    url = SelectQuantization(modelType, url);
+                    // This lets the user choose the bit size of the model and returns a full url for downloading, currently hard-coded to Mistral
+                    url = SelectQuantizationAndGenerateUrl(modelType, url);
 
                     string fileName = Path.GetFileName(url);
                     IOManager.SendMessage($"Filename: {fileName}");
@@ -74,7 +72,7 @@ namespace EdgeRag
         }
 
         // This method lets the user choose how many bits they want their model to use and provides a full download url
-        private static string SelectQuantization(string modelType, string url)
+        private static string SelectQuantizationAndGenerateUrl(string modelType, string url)
         {
             var quants = new List<string> { "Q2_K", "Q3_K_M", "Q4_K_M", "Q5_K_M", "Q6_K", "Q8_0" };
             IOManager.SendMessage($"\nDownloading a {modelType} model, choose a quantization (lower = smaller model):\n");

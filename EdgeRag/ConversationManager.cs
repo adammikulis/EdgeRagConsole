@@ -25,9 +25,7 @@ namespace EdgeRag
         public InteractiveExecutor? executor;
         public ChatSession? session;
 
-        // Platform-agnostic IO to allow to porting to Godot
-        public event Action<string> OnMessage = delegate { };
-
+        // Constructor
         public ConversationManager(ModelManager modelManager, DatabaseManager databaseManager, int maxTokens, string[] systemMessages, string[] antiPrompts)
         {
             this.databaseManager = databaseManager;
@@ -57,7 +55,7 @@ namespace EdgeRag
             {
                 if (modelManager.model == null || modelManager.modelParams == null)
                 {
-                    OnMessage?.Invoke("Model or modelParams is null. Cannot initialize conversation.\n");
+                    IOManager.SendMessageLine("Model or modelParams is null. Cannot initialize conversation.");
                     return;
                 }
 
@@ -83,7 +81,7 @@ namespace EdgeRag
                             maxTokens = 2048; // 2048 is the bare minimum for models like biollama and phi
                             break;
                     }
-                    IOManager.SendMessage($"{selectedModelType}-type model detected, max tokens set to {maxTokens}\n");
+                    IOManager.SendMessageLine($"\n{selectedModelType}-type model detected, max tokens set to {maxTokens}");
                 }
 
                 executor = new InteractiveExecutor(modelManager.context); // Future updates will use the new BatchedExecutor for multiple conversations
@@ -91,6 +89,7 @@ namespace EdgeRag
             });
         }
 
+        // This method directs the flow of the conversation
         public async Task StartChatAsync(bool useDatabaseForChat)
         {
              
@@ -100,9 +99,10 @@ namespace EdgeRag
             while (true)
             {
 
-                // This is where the disctiontion between regular chat and database-enabled chat is made
+                // This is where the distinction between regular chat and database-enabled chat is made
                 if (useDatabaseForChat)
                 {
+                    string prompt = "";
                     IOManager.ClearAndPrintHeading("Chatbot - Using Database");
                     string userInput = getUserInput();
                     if (userInput == null) break;
@@ -113,15 +113,18 @@ namespace EdgeRag
                     summarizedResult = CleanUpString(summarizedResult);
 
                     // Get the standard model response
-                    string responseNoDB = await InteractWithModelAsync($"Solve {userInput}", maxTokens / 8, averageTemperature, false);
-                    responseNoDB.Replace(userInput, "");
+                    prompt = $"Solve {userInput}";
+                    string responseNoDB = await InteractWithModelAsync(prompt, maxTokens / 8, averageTemperature, true); // True means this part of the chat isn't printed to console
+                    responseNoDB.Replace(prompt, "");
                     responseNoDB = CleanUpString(responseNoDB);
-                    
+
                     // Have the model combine the two separate troubleshooting steps for a best solution
-                    string response = await InteractWithModelAsync($"Pick the best solution(s) from {summarizedResult} and {responseNoDB}", maxTokens, averageTemperature, false);
-                    response = CleanUpString(response);
+                    prompt = $"Pick the best solution(s) from {summarizedResult} and {responseNoDB}";
+                    string response = await InteractWithModelAsync(prompt, maxTokens, averageTemperature, false);
+                    response.Replace(prompt, "");
+                    response = CleanUpString(response); // Unused for now
                     
-                    IOManager.SendMessageLine("Hit a key to continue...");
+                    IOManager.SendMessageLine("\nHit a key for new query...");
                     IOManager.AwaitKeypress();
                 }
 
@@ -136,16 +139,17 @@ namespace EdgeRag
                     response.Replace(userInput, "");
                     response = CleanUpString(response); // Response not yet used but available for future iterations
                     
-                    IOManager.SendMessageLine("Hit a key to continue...");
+                    IOManager.SendMessageLine("\nHit a key for new query...");
                     IOManager.AwaitKeypress();
                     
                 }
             }
         }
 
+        // Returns null if the user types nothing or "back", quits out of the program if they type "quit"
         private string getUserInput()
         {
-            IOManager.SendMessageLine("\nChat session started, please input your query (back to go back and quit to quit):");
+            IOManager.SendMessageLine("\nChat session started, please input your query (back to end this chat or quit to quit program):");
             string userInput = IOManager.ReadLine();
 
             if (string.IsNullOrWhiteSpace(userInput) || userInput.ToLower() == "back")
@@ -218,7 +222,7 @@ namespace EdgeRag
                 var factEmbeddings = (double[])row[modelManager.selectedModelType];
                 double score = VectorSearchUtility.CosineSimilarity(queryEmbeddings, factEmbeddings);
                 long incidentNumber = Convert.ToInt64(row["incidentNumber"]);
-                string originalText = row["supportResponse"].ToString(); // Could possibly use incidentSolution, but supportResponse seems to have more data
+                string originalText = row["supportResponse"].ToString(); // Could also return incidentSolution, but supportResponse seems to have more data in the synthetic tickets
                 scoresIncidents.Add(new Tuple<double, long, string>(score, incidentNumber, originalText));
             }
 
@@ -239,13 +243,16 @@ namespace EdgeRag
 
             // Prepare summary from top summarized matches
             var topMatchesForSummary = scoresIncidents.OrderByDescending(s => s.Item1).Take(topMatchesSummarized).ToList();
-            // Initialize StringBuilder for efficient string manipulation
+            
+            // Concatenate and convert the returned results to a string
             StringBuilder summaryRequestBuilder = new StringBuilder($"Solve {prompt} with: ");
             foreach (var (score, incidentNumber, originalText) in topMatchesForSummary)
             {
                 summaryRequestBuilder.Append($"{originalText} ");
             }
             string summaryRequest = summaryRequestBuilder.ToString();
+            
+            // Feed those results into the model
             string summary = await InteractWithModelAsync(summaryRequest, maxTokens / 8, 0.5f, true);
             summary = CleanUpString(summary);
             summary = summary.Replace(summaryRequest, "").Replace(prompt, "");
@@ -253,6 +260,5 @@ namespace EdgeRag
             return summary;
 
         }
-
     }
 }

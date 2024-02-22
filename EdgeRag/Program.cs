@@ -1,10 +1,9 @@
 ﻿// This program allows the user to generate synthetic tech support data and store in a vector database with a locally-run large language model (LLM)
 // The user can then chat with the LLM, querying the database with an issue to get exact solutions from past incidents
 // The tickets can be generated with a higher-quality model, and then a faster model can be used to query that data leading to performance increase
-// There are two distributions: one with a CPU backend that runs on all x64 devices and one with a CUDA12 backend that requires an Nvidia GPU
+// There are two distributions (x64 only): one with a CPU backend that runs on all x64 devices and one with a CUDA12 backend that requires an Nvidia GPU
 // Install Cuda 12.1 and run ReleaseCUDA12 to use Nvida GPU: https://developer.nvidia.com/cuda-12-1-0-download-archive
-// There is a backend for Mac Metal but it is outdated and not tested by the creator of this program
-// Note: Only use Mistral models as all testing was done with them
+// Note: Only use Mistral models as all testing was done with them. Recommend Q4 and above for best quality, but Q2 is acceptable
 
 namespace EdgeRag
 {

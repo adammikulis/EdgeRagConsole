@@ -24,6 +24,7 @@ namespace EdgeRag
         private string supportResponse;
         private string incidentSolution;
 
+        // Constructor
         public SyntheticDataGenerator(ModelManager modelManager, DatabaseManager databaseManager, ConversationManager conversationManager, int questionBatchSize)
         {
             this.modelManager = modelManager;

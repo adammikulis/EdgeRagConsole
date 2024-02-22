@@ -3,7 +3,6 @@
 // The actual conversational querying of the database happens in ConversationManager.cs
 // Future iterations will decouple this and instead check for a loaded model before acting on the database
 
-
 using System.Data;
 using Newtonsoft.Json;
 
@@ -18,7 +17,7 @@ namespace EdgeRag
         public string[] databaseTypes;
         private List<(string Name, Type DataType)> techSupportColumns;
 
-
+        // Constructor
         public DatabaseManager(ModelManager modelManager, string dataDirectoryPath)
         {
             this.dataDirectoryPath = dataDirectoryPath;
@@ -204,12 +203,13 @@ namespace EdgeRag
             return embeddingsDouble;
         }
 
-
+        // Utilize Newtonsoft.Json to directly convert datatable to json, future iterations will likely remove it for System.Text.Json and do datatable -> dict -> json
         public string DataTableToJson(DataTable dataTable)
         {
             return JsonConvert.SerializeObject(dataTable, Formatting.Indented);
         }
 
+        // Utilize Newtonsoft.Json to convert a json to a datatable
         public DataTable JsonToDataTable(string json)
         {
             return JsonConvert.DeserializeObject<DataTable>(json);
@@ -234,7 +234,7 @@ namespace EdgeRag
             return File.Exists(filePath) ? await File.ReadAllTextAsync(filePath) : string.Empty;
         }
 
-
+        // Getter for the vector database so it can be private (may change later)
         public DataTable GetVectorDatabase()
         {
             return vectorDatabase;

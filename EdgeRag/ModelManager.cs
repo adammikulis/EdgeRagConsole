@@ -22,6 +22,7 @@ namespace EdgeRag
         public LLamaEmbedder? embedder;
         public LLamaContext? context;
 
+        // Constructor
         public ModelManager(string modelDirectoryPath, uint seed, uint contextSize, uint numCpuThreads)
         {
             this.modelDirectoryPath = modelDirectoryPath;
@@ -38,6 +39,7 @@ namespace EdgeRag
             return modelManager;
         }
 
+        // Initialization
         public async Task InitializeAsync()
         {
             CheckDirectoryExists();
@@ -81,7 +83,7 @@ namespace EdgeRag
             #endif
 
             CreateModelParams();
-            LoadModelEmbedderContext();
+            LoadModelEmbedderContext(); // Loads the model, embedder, and context needed for the ConversationManager
         }
 
         // Used to manually unload model to free up memory, each of those classes implements IDisposable
@@ -186,7 +188,7 @@ namespace EdgeRag
             return validModelSelected;
         }
 
-        // These needs to be manually updated, should just get linked to maxTokens in the future
+        // These need to be manually updated as models are added, should just get linked to maxTokens in the future
         private void DetermineMaxContextSize()
         {
             switch (selectedModelType)

@@ -6,7 +6,7 @@
 
 namespace EdgeRag
 {
-    public class VectorSearchUtility
+    public static class VectorSearchUtility
     {
         public static double CosineSimilarity(double[] vector1, double[] vector2)
         {

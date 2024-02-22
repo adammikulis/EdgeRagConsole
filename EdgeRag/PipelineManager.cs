@@ -1,5 +1,5 @@
 ﻿// This class manages the life-cycle of the application and initializes the various managers
-// Future updates will decouple the model and database managers moore
+// Future updates will decouple the model and database managers, avoiding the need for arguments depending on other class instances existing
 
 namespace EdgeRag
 {

@@ -1,5 +1,6 @@
 ﻿// This class is for platform-agnostic IO to allow to porting to Godot
 // Using flags, this will allow for a common code-base to be used for multiple apps
+// Everything is public static so that no instances have to exist to send/receive messages
 
 namespace EdgeRag
 {

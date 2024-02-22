@@ -6,12 +6,13 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<PublishAot>true</PublishAot>
-		<InvariantGlobalization>true</InvariantGlobalization>
-		<Configurations>DebugCPU;DebugCUDA12;ReleaseCPU;ReleaseCUDA12</Configurations>
 		<SelfContained>true</SelfContained>
 		<PublishReadyToRun>true</PublishReadyToRun>
+		<PublishTrimmed>true</PublishTrimmed>
+		<InvariantGlobalization>true</InvariantGlobalization>
+		<Configurations>DebugCPU;DebugCUDA12;ReleaseCPU;ReleaseCUDA12</Configurations>
 		<DebugType Condition="'$(Configuration)' == 'ReleaseCPU' or '$(Configuration)' == 'ReleaseCUDA12'">none</DebugType>
-		<Platforms>AnyCPU;x64</Platforms>
+		<Platforms>x64</Platforms>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)'=='DebugCPU'">
@@ -35,7 +36,7 @@
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 	</ItemGroup>
 
-	<ItemGroup Condition="'$(Configuration)'=='DebugCPU' or '$(Configuration)'=='ReleaseCPU'">
+	<ItemGroup Condition="'$(Configuration)'=='DebugCPU' or '$(Configuration)'=='ReleaseCPU' or '$(Configuration)'=='ReleaseARM64'">
 		<PackageReference Include="LLamasharp.Backend.Cpu" Version="0.10.0" />
 	</ItemGroup>
 
