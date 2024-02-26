@@ -106,20 +106,17 @@ namespace EdgeRag
                 newRow["incidentNumber"] = currentIncidentNumber;
 
                 // Sequentially generate and set the content, passing previous content as context (this is what LangChain does)
-                string incidentDetailsPrompt = "Pretend you are the user having a tech issue with your ";
-                incidentDetails = await conversationManager.InteractWithModelAsync($"{incidentDetailsPrompt} {selectedTheme}", maxTokens / 16, userTemperature, internalDialog);
-                incidentDetails = incidentDetails.Replace(incidentDetailsPrompt, "").Replace(selectedTheme, ""); // Always remove previous content after generating a response to avoid duplicated tokens
-                incidentDetails = conversationManager.CleanUpString(incidentDetails);
+                string prompt = $"Pretend you are the user having a tech issue with your {selectedTheme}";
+                string incidentDetails = await conversationManager.InteractWithModelAsync(prompt, maxTokens / 16, userTemperature, internalDialog);
+                incidentDetails = conversationManager.CleanUpString(prompt, incidentDetails);
 
-                string supportResponsePrompt = "Try to solve this tech issue: ";
-                supportResponse = await conversationManager.InteractWithModelAsync($"{supportResponsePrompt} {incidentDetails}", maxTokens / 8, supportTemperature, internalDialog);
-                supportResponse = supportResponse.Replace(supportResponsePrompt, "").Replace(incidentDetails, "");
-                supportResponse = conversationManager.CleanUpString(supportResponse);
+                prompt = $"Try to solve this tech issue: {incidentDetails}";
+                string supportResponse = await conversationManager.InteractWithModelAsync(prompt, maxTokens / 8, supportTemperature, internalDialog);
+                supportResponse = conversationManager.CleanUpString(prompt, supportResponse);
 
-                string incidentSolutionPrompt = "Choose the most likely solution from: ";
-                incidentSolution = await conversationManager.InteractWithModelAsync($"{incidentSolutionPrompt} {supportResponse}", maxTokens / 4, userTemperature, internalDialog);
-                incidentSolution = incidentSolution.Replace(incidentSolutionPrompt, "").Replace(supportResponse, "");
-                incidentSolution = conversationManager.CleanUpString(incidentSolution);
+                prompt = $"Choose the most likely solution from: {supportResponse}";
+                string incidentSolution = await conversationManager.InteractWithModelAsync(prompt, maxTokens / 4, userTemperature, internalDialog);
+                incidentSolution = conversationManager.CleanUpString(prompt, incidentSolution);
 
                 // Assign generated content to the newRow
                 newRow["incidentDetails"] = incidentDetails;

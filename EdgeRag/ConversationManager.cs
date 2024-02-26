@@ -102,27 +102,23 @@ namespace EdgeRag
                 // This is where the distinction between regular chat and database-enabled chat is made
                 if (useDatabaseForChat)
                 {
-                    string prompt = "";
                     IOManager.ClearAndPrintHeading("Chatbot - Using Database");
-                    string userInput = getUserInput();
-                    if (userInput == null) break;
+                    string prompt = getUserInput();
+                    if (prompt == null) break;
 
                     // Get the top result(s) from the database
-                    var summarizedResult = await QueryDatabase(userInput, 5, 3);
-                    summarizedResult.Replace(userInput, "");
-                    summarizedResult = CleanUpString(summarizedResult);
+                    var responseDB = await QueryDatabase(prompt, 5, 3);
+                    responseDB = CleanUpString(prompt, responseDB);
 
                     // Get the standard model response
-                    prompt = $"Solve {userInput}";
+                    prompt = $"Solve {prompt}";
                     string responseNoDB = await InteractWithModelAsync(prompt, maxTokens / 8, averageTemperature, true); // True means this part of the chat isn't printed to console
-                    responseNoDB.Replace(prompt, "");
-                    responseNoDB = CleanUpString(responseNoDB);
+                    responseNoDB = CleanUpString(prompt, responseNoDB);
 
                     // Have the model combine the two separate troubleshooting steps for a best solution
-                    prompt = $"Pick the best solution(s) from {summarizedResult} and {responseNoDB}";
+                    prompt = $"Pick the best solution(s) from {responseDB} and {responseNoDB}";
                     string response = await InteractWithModelAsync(prompt, maxTokens, averageTemperature, false);
-                    response.Replace(prompt, "");
-                    response = CleanUpString(response); // Unused for now
+                    response = CleanUpString(prompt, response); // Unused for now
                     
                     IOManager.SendMessageLine("\nHit a key for new query...");
                     IOManager.AwaitKeypress();
@@ -137,7 +133,7 @@ namespace EdgeRag
 
                     string response = await InteractWithModelAsync($"Solve {userInput}", maxTokens / 8, averageTemperature, false);
                     response.Replace(userInput, "");
-                    response = CleanUpString(response); // Response not yet used but available for future iterations
+                    response = CleanUpString(userInput, response); // Response not yet used but available for future iterations
                     
                     IOManager.SendMessageLine("\nHit a key for new query...");
                     IOManager.AwaitKeypress();
@@ -168,9 +164,10 @@ namespace EdgeRag
         }
 
         // It is important to clean the data both in and out of the LLM (particularly when chaining responses)
-        public string CleanUpString(string input)
+        public string CleanUpString(string prompt, string fullString)
         {
-            string cleanedString = input.Replace(antiPrompts[0], "")
+            string cleanedString = fullString.Replace(antiPrompts[0], "")
+                .Replace(prompt, "")
                 .Replace("Narrator:", "")
                 .Replace("AI:", "")
                 .Replace("User:", "")
@@ -254,7 +251,7 @@ namespace EdgeRag
             
             // Feed those results into the model
             string summary = await InteractWithModelAsync(summaryRequest, maxTokens / 8, 0.5f, true);
-            summary = CleanUpString(summary);
+            summary = CleanUpString(prompt, summary);
             summary = summary.Replace(summaryRequest, "").Replace(prompt, "");
 
             return summary;

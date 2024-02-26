@@ -57,9 +57,9 @@ namespace EdgeRag
             gpuLayerCount = 0;
             #if RELEASECUDA12
                 // CUDA-specific initialization
-                string windowsCudaPath = @"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.1";
-                string linuxCudaPath = "/usr/local/cuda-12.1";
-                if (System.IO.Directory.Exists(windowsCudaPath) || System.IO.Directory.Exists(linuxCudaPath))
+                string windowsCudaPath = @"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA";
+                string[] linuxCudaPaths = { "/usr/local/cuda-12.0", "/usr/local/cuda-12.1", "/usr/local/cuda-12.2", "/usr/local/cuda-12.3" };
+                if (System.IO.Directory.Exists(windowsCudaPath) || linuxCudaPaths.Any(path => System.IO.Directory.Exists(path)))
                 {
                     IOManager.PrintCudaInitialization();
                     string input = IOManager.ReadLine();
@@ -152,7 +152,7 @@ namespace EdgeRag
                 Seed = seed,
                 ContextSize = contextSize,
                 EmbeddingMode = true, // Needs to be true to retrieve embeddings
-                GpuLayerCount = gpuLayerCount,
+                GpuLayerCount = gpuLayerCount, // Set to -1 for all layers, 0 for cpu-only, 1-33 for precise layer number control
                 Threads = numCpuThreads
             };
         }
